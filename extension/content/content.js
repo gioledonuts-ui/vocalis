@@ -141,8 +141,18 @@
   }
 
   async function startPipeline() {
+    logLine("activation demandée");
     const video = getVideoElement();
-    if (!video) return;
+    if (!video) {
+      logLine("ERREUR : aucun <video> trouvé dans la page");
+      showOverlay({
+        title: "Lecteur vidéo introuvable.",
+        subtitle: "Recharge la page YouTube (F5) puis reclique sur Vocalis.",
+        error: true,
+      });
+      return;
+    }
+    logLine("vidéo trouvée, démarrage du pipeline");
 
     const engine = new VocalisEngine(video, {
       onPhase: (name, pct, info) => {
@@ -234,6 +244,21 @@
   }
 
   function setEnabled(enabled) {
+    // Après un « Actualiser » de l'extension dans chrome://extensions, les
+    // onglets ouverts gardent l'ANCIEN script dont le worker est mort :
+    // on le détecte et on demande un F5 au lieu de pendouiller en silence.
+    let ctxOk = true;
+    try { ctxOk = !!chrome.runtime.id; } catch { ctxOk = false; }
+    if (!ctxOk || !enabled) {
+      if (!ctxOk) {
+        showOverlay({
+          title: "Vocalis a été mis à jour.",
+          subtitle: "Recharge cette page YouTube (F5) puis reclique sur Vocalis.",
+          error: true,
+        });
+        return;
+      }
+    }
     state.enabled = enabled;
     chrome.runtime.sendMessage({ type: "vocalis:badge", on: enabled }).catch(() => {});
     const video = getVideoElement();
@@ -283,6 +308,7 @@
         enabled: state.enabled,
         started: !!state.engine?.started,
         active: !!state.engine?.active,
+        running: !!state.engine?.running,
         phase: state.status.phase,
         pct: state.status.pct,
         notice: state.status.notice,
@@ -290,7 +316,7 @@
         processedPct: state.engine?.status().processedPct ?? null,
         via: state.engine?.status().via ?? null,
         mode: state.engine?.status().mode ?? null,
-        journal: state.journal.slice(-12),
+        journal: state.journal.slice(-14),
       });
     }
   });

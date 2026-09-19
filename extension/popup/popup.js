@@ -105,13 +105,15 @@ async function refresh() {
   }
 
   const journalEl = document.getElementById("journal");
-  if (st.journal && st.journal.length) {
-    journalEl.classList.remove("hidden");
-    journalEl.textContent = st.journal.join("\n");
-    journalEl.scrollTop = journalEl.scrollHeight;
-  } else {
-    journalEl.classList.add("hidden");
-  }
+  const debug =
+    "état=" + (st.active ? "ACTIF" : st.started ? "prêt" : st.running ? "pipeline" : "idle") +
+    "  phase=" + (st.phase ?? "-") +
+    (st.pct != null ? " " + st.pct + "%" : "") +
+    "  mode=" + (st.mode ?? "-") + "  via=" + (st.via ?? "-") + "\n" +
+    (st.journal || []).join("\n");
+  journalEl.classList.remove("hidden");
+  journalEl.textContent = debug;
+  journalEl.scrollTop = journalEl.scrollHeight;
 }
 
 btn.addEventListener("click", async () => {

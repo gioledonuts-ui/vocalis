@@ -4,6 +4,16 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.4.4] — 2026-09-19
+
+### Ajouté
+- Popup : bloc debug permanent (état/phase/mode/voie + journal) — une copie
+  d'écran suffit à diagnostiquer n'importe quel blocage.
+- Logs pré-worker (playerResponse, vidéo trouvée ou non, lancement worker).
+- Détection « extension rechargée mais pas la page » : au lieu d'un pipeline
+  mort en silence, message clair « Recharge la page (F5) ».
+- Cas « aucun <video> trouvé » : message clair au lieu d'un retour silencieux.
+
 ## [0.4.3] — 2026-09-19
 
 ### Ajouté

@@ -154,10 +154,15 @@ self.VocalisEngine = (() => {
       this.running = true;
 
       this.phase("response");
+      this.hooks.onLog && this.hooks.onLog("attente du playerResponse…");
       const payload = await this.getPlayerResponse();
       if (this.aborted) return;
       const pr = payload?.pr;
       this.extras = payload || {};
+      this.hooks.onLog && this.hooks.onLog(pr?.videoDetails?.videoId
+        ? "playerResponse OK (videoId " + pr.videoDetails.videoId + ", " +
+          Math.round(parseFloat(pr.videoDetails.lengthSeconds) || 0) + " s)"
+        : "playerResponse VIDE");
       if (!pr?.videoDetails?.videoId) {
         this.hooks.onError && this.hooks.onError("Impossible de lire le lecteur YouTube.");
         return;
@@ -186,6 +191,7 @@ self.VocalisEngine = (() => {
 
       /* Worker IA : créé maintenant, initialisé EN PARALLÈLE du flux */
       this.phase("model");
+      this.hooks.onLog && this.hooks.onLog("lancement du worker IA…");
       this.spawnWorker();
 
       const incrOk =
