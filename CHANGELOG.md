@@ -4,6 +4,21 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.0] — 2026-09-19
+
+### Ajouté
+- **Vocalis Studio local** (`studio.html`) : interface dédiée pour tester
+  et utiliser Vocalis directement sur n'importe quel fichier audio (MP3, WAV,
+  M4A, FLAC, etc.) par simple glisser-déposer. L'IA sépare les voix bloc par
+  bloc avec barre d'avancement en temps réel, permet d'écouter le résultat et
+  le télécharge automatiquement en WAV haute qualité sur le PC.
+- Bouton d'accès direct « 🎙️ Studio local » dans le popup de l'extension.
+
+### Corrigé
+- `worker-src 'self' 'wasm-unsafe-eval'` ajouté à la CSP du manifest pour
+  garantir que les Web Workers héritent de l'autorisation d'exécuter
+  WebAssembly sans restriction.
+
 ## [0.4.10] — 2026-09-19
 
 ### Corrigé

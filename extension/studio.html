@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vocalis Studio — Nettoyeur audio local</title>
+  <link rel="stylesheet" href="studio.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <span class="bar b1"></span>
+        <span class="bar b2"></span>
+        <span class="bar b3"></span>
+        <span class="bar b4"></span>
+        <span class="bar b5"></span>
+      </div>
+      <div>
+        <h1>Vocalis Studio</h1>
+        <p class="subtitle">Isole les voix et retire la musique de n'importe quel fichier audio — 100&nbsp;% local sur ton PC (HTDemucs, WebGPU/RTX).</p>
+      </div>
+    </header>
+
+    <!-- Zone de dépôt de fichier -->
+    <section class="card" id="drop-card">
+      <div id="drop-zone" class="drop-zone">
+        <div class="drop-icon">🎵</div>
+        <p class="drop-title">Glisse et dépose un fichier audio ici</p>
+        <p class="drop-hint">MP3, WAV, M4A, AAC, FLAC, OGG… (ou clique pour parcourir)</p>
+        <input type="file" id="file-input" accept="audio/*,.mp3,.wav,.m4a,.aac,.flac,.ogg" class="hidden-input" />
+      </div>
+
+      <!-- Fichier sélectionné -->
+      <div id="file-info" class="file-info hidden">
+        <div class="file-meta">
+          <span class="file-name" id="file-name">morceau.mp3</span>
+          <span class="file-details" id="file-details">3.4 Mo · 2 min 14 s</span>
+        </div>
+        <div class="actions">
+          <button id="start-btn" class="btn btn-primary">⚡ Lancer le nettoyage (extraire les voix)</button>
+          <button id="change-btn" class="btn btn-secondary">Changer de fichier</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Progression du traitement -->
+    <section class="card hidden" id="progress-card">
+      <div class="progress-header">
+        <span id="progress-status" class="progress-status">Chargement du modèle IA…</span>
+        <span id="progress-pct" class="progress-pct">0 %</span>
+      </div>
+      <div class="progress-bar-bg">
+        <div id="progress-bar-fill" class="progress-bar-fill"></div>
+      </div>
+      <div class="progress-sub">
+        <span id="progress-subtext">Préparation de la session WebGPU…</span>
+        <span id="progress-eta"></span>
+      </div>
+    </section>
+
+    <!-- Résultat -->
+    <section class="card hidden" id="result-card">
+      <div class="result-header">
+        <div class="success-badge">✓ Voix nettoyées avec succès !</div>
+        <span id="result-timing" class="result-timing"></span>
+      </div>
+      <div class="player-zone">
+        <p class="player-label">Écouter le résultat (voix seules, musique supprimée) :</p>
+        <audio id="audio-preview" controls class="audio-player"></audio>
+      </div>
+      <div class="download-zone">
+        <a id="download-btn" class="btn btn-download" download="voix-seules.wav">
+          ⬇️ Télécharger le fichier nettoyé (.wav haute qualité)
+        </a>
+        <button id="restart-btn" class="btn btn-secondary">Traiter un autre fichier</button>
+      </div>
+    </section>
+
+    <!-- Console de journalisation -->
+    <section class="card journal-card">
+      <div class="journal-header" id="journal-toggle">
+        <span>📋 Journal technique en direct</span>
+        <span id="journal-arrow">▼</span>
+      </div>
+      <div id="journal-logs" class="journal-logs"></div>
+    </section>
+  </div>
+
+  <script src="studio.js"></script>
+</body>
+</html>

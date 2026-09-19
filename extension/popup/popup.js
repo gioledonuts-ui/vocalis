@@ -135,5 +135,12 @@ btn.addEventListener("click", async () => {
   refresh();
 });
 
+const openStudioBtn = document.getElementById("open-studio");
+if (openStudioBtn) {
+  openStudioBtn.addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("studio.html") });
+  });
+}
+
 refresh();
 setInterval(refresh, 800); // statut vivant pendant que le popup est ouvert
