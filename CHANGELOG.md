@@ -4,6 +4,22 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.4.5] — 2026-09-19
+
+### Corrigé
+- Le pipeline pouvait rester bloqué juste après « playerResponse OK » sans
+  aucune erreur ni log : recherche du flux audio entièrement réécrite.
+  - chaque étape est journalisée (formats page, Innertube TV/Android,
+    base.js, déchiffrement) ;
+  - toutes les attentes réseau sont bornées (le `.json()` Innertube et la
+    lecture de base.js n'avaient AUCUN timeout) ;
+  - toute exception remonte désormais en message d'erreur visible au lieu
+    d'un chargement infini silencieux.
+- Garde-fou global : si une phase reste figée 45 s, un message le dit
+  explicitement (au lieu d'une barre infinie).
+- base.js (déchiffrement) : retrouvé aussi via la balise <script> de la
+  page quand le playerResponse n'a pas d'assets.
+
 ## [0.4.4] — 2026-09-19
 
 ### Ajouté

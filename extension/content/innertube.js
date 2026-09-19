@@ -29,9 +29,10 @@ self.VocalisInnertube = (() => {
   /**
    * Demande le playerResponse via youtubei/v1/player pour plusieurs clients.
    * Retourne { formats, client } avec des formats audio ayant une `url` en
-   * clair, ou null.
+   * clair, ou null. `onLog` (optionnel) journalise chaque tentative.
    */
-  async function query(videoId, apiKey) {
+  async function query(videoId, apiKey, onLog) {
+    const log = (m) => onLog && onLog(m);
     for (const c of CLIENTS) {
       try {
         const client = {
@@ -60,15 +61,28 @@ self.VocalisInnertube = (() => {
             }),
           }
         );
-        if (!resp.ok) continue;
-        const j = await resp.json();
-        if (j?.playabilityStatus?.status !== "OK") continue;
+        if (!resp.ok) { log("innertube " + c.clientName + " : HTTP " + resp.status); continue; }
+        // json() borné : une réponse qui s'éternise ne doit pas tout bloquer.
+        const j = await new Promise((resolve, reject) => {
+          const t = setTimeout(() => reject(new Error("timeout json")), 8000);
+          resp.json().then((v) => { clearTimeout(t); resolve(v); },
+                           (e) => { clearTimeout(t); reject(e); });
+        });
+        if (j?.playabilityStatus?.status !== "OK") {
+          log("innertube " + c.clientName + " : refusé (" +
+              (j?.playabilityStatus?.status || "réponse vide") + ")");
+          continue;
+        }
         const formats = (j?.streamingData?.adaptiveFormats || []).filter(
           (f) => f.url && (f.mimeType || "").startsWith("audio/")
         );
-        if (formats.length) return { formats, client: c.clientName };
-      } catch {
-        /* client suivant */
+        if (formats.length) {
+          log("innertube " + c.clientName + " : OK, " + formats.length + " formats audio");
+          return { formats, client: c.clientName };
+        }
+        log("innertube " + c.clientName + " : aucun format audio avec URL");
+      } catch (e) {
+        log("innertube " + c.clientName + " : échec (" + (e?.message || e) + ")");
       }
     }
     return null;

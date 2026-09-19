@@ -52,8 +52,13 @@
       const js =
         playerResponse()?.assets?.js ||
         (window.ytplayer && window.ytplayer.config && window.ytplayer.config.assets?.js);
-      if (!js) return null;
-      return js.startsWith("http") ? js : "https://www.youtube.com" + js;
+      if (js) return js.startsWith("http") ? js : "https://www.youtube.com" + js;
+      // Le playerResponse runtime n'a pas toujours d'assets : on cherche la
+      // balise <script> du lecteur chargée par la page elle-même.
+      const el = document.querySelector(
+        'script[src*="/s/player/"][src$="base.js"], script[src*="/s/player/"][src*="player_ias"]'
+      );
+      return el ? el.src : null;
     } catch {
       return null;
     }

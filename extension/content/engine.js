@@ -29,6 +29,17 @@ self.VocalisEngine = (() => {
   const CACHE_CAP = 1_500_000_000;  // plafond IndexedDB par vidéo (~1,5 Go)
   const DRIFT_MAX = 0.09;           // écart audio/vidéo toléré (s)
 
+  /** Borne n'importe quelle promesse : jamais d'attente infinie. */
+  function withTimeout(promise, ms, label) {
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error("délai dépassé : " + label)), ms);
+      promise.then(
+        (v) => { clearTimeout(t); resolve(v); },
+        (e) => { clearTimeout(t); reject(e); }
+      );
+    });
+  }
+
   class Engine {
     constructor(video, hooks = {}) {
       this.video = video;
@@ -110,11 +121,26 @@ self.VocalisEngine = (() => {
     }
 
     async resolveAudioSource(pr) {
+      const log = (m) => this.hooks.onLog && this.hooks.onLog(m);
+      const fmts = pr?.streamingData?.adaptiveFormats || [];
+      const pageAudio = fmts.filter((f) => (f.mimeType || "").startsWith("audio/"));
+      const withUrl = pageAudio.filter((f) => f.url);
+      log("flux page : " + pageAudio.length + " formats audio, " +
+          withUrl.length + " avec URL directe");
+
       const out = { m4a: this.pickAudio(pr, "audio/mp4"), best: this.pickAudio(pr, "audio/"), via: "page" };
       if (out.best) return out;
 
+      log("pas d'URL directe → test de l'API Innertube (clients TV/Android)…");
       const apiKey = this.extras?.apiKey || "AIzaSyAO_FJ2SlqU8Q4STEHLNlTpqUcavnZbsC8";
-      const it = await VocalisInnertube.query(pr.videoDetails.videoId, apiKey);
+      let it = null;
+      try {
+        it = await withTimeout(
+          VocalisInnertube.query(pr.videoDetails.videoId, apiKey, log), 20000, "innertube"
+        );
+      } catch (e) {
+        log("innertube : échec global (" + (e?.message || e) + ")");
+      }
       if (it) {
         const f = (list) =>
           list.sort((a, b) => (b.bitrate || b.averageBitrate || 0) - (a.bitrate || a.averageBitrate || 0))[0];
@@ -126,22 +152,35 @@ self.VocalisEngine = (() => {
 
       const jsUrl = this.extras?.playerJsUrl;
       if (jsUrl) {
+        log("déchiffrement : récupération du lecteur base.js…");
         try {
-          const baseJs = await (await fetch(jsUrl, { signal: AbortSignal.timeout(8000) })).text();
-          const cands = (pr?.streamingData?.adaptiveFormats || [])
-            .filter((f) => f.signatureCipher && (f.mimeType || "").startsWith("audio/"))
+          const resp = await withTimeout(
+            fetch(jsUrl, { signal: AbortSignal.timeout(10000) }), 10000, "base.js (réponse)"
+          );
+          const baseJs = await withTimeout(resp.text(), 15000, "base.js (lecture)");
+          log("base.js chargé (" + Math.round(baseJs.length / 1024) + " Ko)");
+          const cands = pageAudio
+            .filter((f) => f.signatureCipher)
             .sort((a, b) => (b.bitrate || b.averageBitrate || 0) - (a.bitrate || a.averageBitrate || 0));
           for (const f of cands) {
             const solved = VocalisCipher.solve(baseJs, f.signatureCipher);
             if (solved) {
-              const withUrl = { ...f, url: solved.url };
+              const withSolved = { ...f, url: solved.url };
               out.via = "déchiffrement";
-              if ((f.mimeType || "").startsWith("audio/mp4") && !out.m4a) out.m4a = withUrl;
-              out.best = out.best || withUrl;
-              if (out.best) return out;
+              if ((f.mimeType || "").startsWith("audio/mp4") && !out.m4a) out.m4a = withSolved;
+              out.best = out.best || withSolved;
+              if (out.best) {
+                log("déchiffrement : URL audio reconstituée");
+                return out;
+              }
             }
           }
-        } catch { /* déchiffrement indisponible */ }
+          log("déchiffrement : aucun format résolu");
+        } catch (e) {
+          log("déchiffrement : échec (" + (e?.message || e) + ")");
+        }
+      } else {
+        log("base.js introuvable dans la page → déchiffrement impossible");
       }
       return out;
     }
@@ -175,7 +214,15 @@ self.VocalisEngine = (() => {
       this.nChunks = Math.max(1, Math.ceil(this.duration / CHUNK));
       this.cacheEnabled = this.nChunks * CHUNK * SR * 2 * 2 <= CACHE_CAP;
 
-      const src = await this.resolveAudioSource(pr);
+      let src;
+      try {
+        src = await this.resolveAudioSource(pr);
+      } catch (e) {
+        this.hooks.onLog && this.hooks.onLog("ERREUR recherche de flux : " + (e?.message || e));
+        this.hooks.onError &&
+          this.hooks.onError("Impossible de trouver le flux audio (" + (e?.message || "erreur") + ").");
+        return;
+      }
       this.via = src.via;
       this.hooks.onLog && this.hooks.onLog("flux audio obtenu via : " + src.via +
         (src.m4a ? " (m4a OK → mode fragmenté)" : " (pas de m4a → mode complet)"));

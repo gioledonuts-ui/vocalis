@@ -128,6 +128,7 @@
   /* ------------------------------------------------------------------ */
 
   async function teardown({ purge = false } = {}) {
+    if (state.stallTimer) { clearInterval(state.stallTimer); state.stallTimer = null; }
     const engine = state.engine;
     state.engine = null;
     engine?.destroy();
@@ -240,7 +241,47 @@
     });
 
     state.engine = engine;
-    await engine.start();
+
+    /* Garde-fou : si la phase reste figée 45 s, on l'affiche au lieu de
+       laisser un chargement infini silencieux. */
+    let lastSig = "", lastChange = Date.now();
+    state.stallTimer && clearInterval(state.stallTimer);
+    state.stallTimer = setInterval(() => {
+      const eng = state.engine;
+      if (!state.enabled || !eng) { clearInterval(state.stallTimer); state.stallTimer = null; return; }
+      if (eng.started) { clearInterval(state.stallTimer); state.stallTimer = null; return; }
+      const sig = state.status.phase + "|" + state.status.pct;
+      if (sig !== lastSig) { lastSig = sig; lastChange = Date.now(); return; }
+      if (Date.now() - lastChange > 45000) {
+        clearInterval(state.stallTimer); state.stallTimer = null;
+        const etape = state.status.phase || "?";
+        logLine("BLOCAGE : aucun progrès depuis 45 s à l'étape « " + etape + " »");
+        showOverlay({
+          title: "Pipeline bloqué à l'étape « " + etape + " ».",
+          subtitle:
+            "Ouvre le popup Vocalis et envoie le bloc debug affiché : " +
+            "tout y est journalisé, on saura quoi corriger.",
+          error: true,
+          closable: true,
+          pct: null,
+        });
+      }
+    }, 5000);
+
+    try {
+      await engine.start();
+    } catch (e) {
+      logLine("ERREUR pipeline : " + (e?.message || e));
+      if (state.enabled) {
+        showOverlay({
+          title: "Échec du pipeline : " + (e?.message || e),
+          subtitle: "Ouvre le popup Vocalis et envoie le bloc debug.",
+          error: true,
+          closable: true,
+          pct: null,
+        });
+      }
+    }
   }
 
   function setEnabled(enabled) {
