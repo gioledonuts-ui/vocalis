@@ -119,6 +119,30 @@ Avantages :
   barre rouge YouTube, montrant les plages dont le son est prêt — même
   principe visuel que la barre grise de buffer de YouTube.
 
+## Réalité v0.2 (ce qui est implémenté aujourd'hui)
+
+- Le flux audio est lu via un pont « main world » (`bridge.js`) qui appelle
+  `movie_player.getPlayerResponse()` — fiable y compris en navigation SPA.
+- Téléchargement `fetch()` du format audio au plus haut débit (permission
+  `*://*.googlevideo.com/*`), décodage `decodeAudioData`, découpage en
+  segments de 10 s en PCM16, écriture IndexedDB en arrière-plan.
+- Relecture : vidéo `muted`, segments rejoués via Web Audio, programmation
+  45 s à l'avance, watchdog anti-dérive (tolérance 90 ms), gestion de
+  `waiting`/`playing`/`seeked`/`ratechange`.
+- Fenêtre RAM d'environ 20 min de segments ; le reste vit en IndexedDB
+  (retour arrière lointain = relecture depuis le cache).
+- Limites connues : décodage complet en mémoire (mémoire proportionnelle à
+  la durée — sera remplacé par un traitement segment par segment en v0.3,
+  qui est de toute façon ce que demande le modèle), vitesse ≠ ×1 → retour au
+  son original, directs non gérés.
+
+### Insertion du modèle en v0.3
+
+Le modèle ONNX s'insère entre le décodage et la mise en cache : chaque
+segment décodé passe dans le modèle (voix uniquement) avant d'être mis en
+cache/rejoué. Le pré-chargement devient alors réel : on traite d'abord les
+N premières secondes, la lecture démarre, le reste suit en arrière-plan.
+
 ## Composants du dépôt
 
 | Fichier | Rôle |

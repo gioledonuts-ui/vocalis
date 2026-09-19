@@ -4,6 +4,28 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.2.0] — 2026-09-19
+
+### Ajouté
+- **Pipeline audio complet (sans modèle)** : téléchargement du flux audio
+  adaptatif (meilleur débit), décodage, découpage en segments de 10 s.
+- **Relecture remplacée et synchronisée** : vidéo en sourdine, son rejoué via
+  Web Audio, re-sync permanente sur `video.currentTime` (seek, pause,
+  mise en tampon, changement de vidéo).
+- **Cache IndexedDB** : segments conservés pendant la vidéo (retour arrière
+  instantané), purgés quand on quitte la vidéo. Plafond ~1,5 Go par vidéo.
+- **Overlay à progression réelle** : téléchargement (%, Mo), analyse,
+  préparation ; état d'erreur propre (vidéo protégée, direct…).
+- **Barre « son traité »** alimentée en direct au-dessus de la barre YouTube.
+- **Popup vivant** : phase et progression du pipeline affichées en direct.
+
+### Limites connues (documentées, corrigées plus tard)
+- Décodage complet en mémoire : vidéos > 2 h gourmandes (v0.3 passera en
+  traitement segment par segment).
+- Vitesse de lecture ≠ ×1 : son original rétabli (pas de time-stretch).
+- Directs (lives) non gérés.
+- Le son joué est l'original : la séparation voix/musique arrive en v0.3.
+
 ## [0.1.0] — 2026-09-19
 
 ### Ajouté

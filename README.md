@@ -7,10 +7,11 @@ n'aiment pas la musique inutile) : elle retire la musique de fond des vidéos
 YouTube pour ne garder que les voix et les sons utiles — directement sur ton
 PC, sans envoyer tes données nulle part.
 
-> ⚠️ **Statut : v0.1 — mise en place du projet.**
-> Cette version contient la structure de l'extension, l'interface de base,
-> la documentation technique et le système de mise à jour automatique.
-> Le moteur de séparation audio arrive dans les prochaines versions
+> ⚠️ **Statut : v0.2 — pipeline audio en place.**
+> L'extension remplace déjà le son de la vidéo par sa version re-synchronisée
+> (cache, seek instantané, barre « son traité », overlay de chargement) —
+> mais joue pour l'instant le son **original**. Le modèle qui retire la
+> musique s'insère en v0.3 sans rien changer au reste
 > (voir la [feuille de route](docs/ROADMAP.md)).
 
 ---

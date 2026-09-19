@@ -1,14 +1,23 @@
 /**
  * Vocalis — popup (bouton de la barre d'extensions Chrome)
  *
- * v0.1 : active/désactive Vocalis pour l'onglet YouTube courant.
- * L'état est persisté dans chrome.storage.local (par tabId) et transmis
- * au script de contenu de la page YouTube.
+ * v0.2 : active/désactive Vocalis sur l'onglet YouTube courant ET affiche
+ * l'état en direct du pipeline (phase, progression, éventuel message).
  */
 
 const btn = document.getElementById("toggle");
 const statusEl = document.getElementById("status");
 const versionEl = document.getElementById("version");
+const progressZone = document.getElementById("progress-zone");
+const progressFill = document.getElementById("progress-fill");
+const progressLabel = document.getElementById("progress-label");
+
+const PHASES = {
+  response: "Lecture du lecteur YouTube…",
+  download: "Téléchargement de l'audio",
+  decode: "Analyse de l'audio…",
+  prepare: "Préparation du son",
+};
 
 function isYouTubeUrl(url = "") {
   try {
@@ -35,6 +44,7 @@ async function refresh() {
     btn.textContent = "Ouvre une vidéo YouTube";
     statusEl.textContent =
       "Vocalis s'utilise sur une page YouTube. Ouvre une vidéo puis reviens ici.";
+    progressZone.classList.add("hidden");
     return;
   }
 
@@ -44,9 +54,47 @@ async function refresh() {
   btn.disabled = false;
   btn.classList.toggle("on", enabled);
   btn.textContent = enabled ? "Désactiver Vocalis" : "Activer sur cette vidéo";
-  statusEl.textContent = enabled
-    ? "Vocalis est actif sur cet onglet. (v0.1 : le moteur de séparation arrive en v0.3.)"
-    : "Prêt. Clique pour traiter le son de cette vidéo sans sa musique de fond.";
+
+  if (!enabled) {
+    statusEl.textContent =
+      "Prêt. Clique pour remplacer le son de la vidéo par sa version sans musique (modèle en v0.3).";
+    progressZone.classList.add("hidden");
+    return;
+  }
+
+  // Statut en direct du pipeline côté page.
+  let st = null;
+  try {
+    st = await chrome.tabs.sendMessage(tab.id, { type: "vocalis:get-status" });
+  } catch {
+    /* page pas encore prête */
+  }
+
+  if (!st) {
+    statusEl.textContent = "Vocalis actif — en attente du lecteur vidéo…";
+    progressZone.classList.add("hidden");
+    return;
+  }
+
+  if (st.notice) statusEl.textContent = st.notice;
+  else if (st.active)
+    statusEl.textContent = "Son remplacé et synchronisé. Retour arrière = instantané (cache).";
+  else if (st.started) statusEl.textContent = "Son prêt — lecture en cours de bascule…";
+  else statusEl.textContent = "Pipeline en cours…";
+
+  if (!st.active && st.phase) {
+    progressZone.classList.remove("hidden");
+    const label = PHASES[st.phase] || st.phase;
+    if (st.pct != null) {
+      progressFill.style.width = st.pct + "%";
+      progressLabel.textContent = `${label} — ${st.pct} %`;
+    } else {
+      progressFill.style.width = "100%";
+      progressLabel.textContent = label;
+    }
+  } else {
+    progressZone.classList.add("hidden");
+  }
 }
 
 btn.addEventListener("click", async () => {
@@ -60,14 +108,13 @@ btn.addEventListener("click", async () => {
   else delete enabledTabs[tab.id];
   await chrome.storage.local.set({ enabledTabs });
 
-  // Prévient le service worker (badge) et la page YouTube (overlay).
   chrome.runtime.sendMessage({ type: "vocalis:tab-state", tabId: tab.id, on: nowEnabled });
-  chrome.tabs.sendMessage(tab.id, { type: "vocalis:set-enabled", enabled: nowEnabled }).catch(() => {
-    // La page n'a pas encore son script de contenu (chargement en cours) :
-    // elle relira l'état au prochain message. Rien à faire de plus en v0.1.
-  });
+  chrome.tabs
+    .sendMessage(tab.id, { type: "vocalis:set-enabled", enabled: nowEnabled })
+    .catch(() => {});
 
   refresh();
 });
 
 refresh();
+setInterval(refresh, 800); // statut vivant pendant que le popup est ouvert

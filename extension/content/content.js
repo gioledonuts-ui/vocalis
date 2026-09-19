@@ -1,20 +1,13 @@
 /**
- * Vocalis — script de contenu YouTube (v0.1 : interface & squelette)
+ * Vocalis — script de contenu YouTube v0.2
  *
- * Ce fichier est injecté sur toutes les pages youtube.com.
- *
- * En v0.1 il gère :
- *  - l'overlay de chargement (écran affiché pendant la préparation du son) ;
- *  - la barre « son traité » qui viendra se placer au niveau de la barre
- *    rouge YouTube (comme la barre grise de buffer, mais pour l'audio traité) ;
- *  - les hooks de navigation (YouTube est une SPA : on doit purger le cache
- *    quand on quitte une vidéo — logique réelle en v0.2).
- *
- * En v0.2+ il orchestrera :
- *  - la récupération du flux audio de la vidéo ;
- *  - le découpage en segments et leur envoi au moteur de séparation ;
- *  - la relecture du son sans musique, synchronisé avec l'image ;
- *  - le cache IndexedDB (conservé pendant la vidéo, purgé en la quittant).
+ * Orchestre le moteur audio (engine.js) :
+ *  - activation/désactivation depuis le popup ;
+ *  - overlay de chargement avec progression réelle (téléchargement,
+ *    décodage, préparation) ;
+ *  - barre « son traité » au-dessus de la barre rouge YouTube ;
+ *  - cycle de vie du cache : conservé pendant la vidéo, purgé quand on
+ *    en change (SPA) ou quand on quitte la page.
  */
 
 (() => {
@@ -22,24 +15,21 @@
 
   const state = {
     enabled: false,
-    overlay: null,
-    overlayTimer: null,
+    engine: null,
+    currentVideoId: null,
+    status: { phase: null, pct: null, notice: null },
   };
 
-  /* ------------------------------------------------------------------ */
-  /* Utilitaires DOM                                                     */
-  /* ------------------------------------------------------------------ */
+  const MB = (b) => (b / 1048576).toFixed(1) + " Mo";
 
-  const getVideoElement = () => document.querySelector("video.html5-main-video") ||
-    document.querySelector("video");
-
-  const getPlayerContainer = () => document.querySelector(".html5-video-player");
+  const getVideoElement = () =>
+    document.querySelector("video.html5-main-video") || document.querySelector("video");
 
   /* ------------------------------------------------------------------ */
-  /* Overlay de chargement                                               */
+  /* Overlay                                                             */
   /* ------------------------------------------------------------------ */
 
-  function showOverlay({ title, subtitle, progressPct = null }) {
+  function showOverlay({ title, subtitle, pct = null, error = false, closable = false }) {
     let overlay = document.getElementById("vocalis-overlay");
     if (!overlay) {
       overlay = document.createElement("div");
@@ -53,132 +43,191 @@
           <p class="vocalis-subtitle"></p>
           <div class="vocalis-progress"><div class="vocalis-progress-fill"></div></div>
           <p class="vocalis-note"></p>
+          <button class="vocalis-close" type="button">Fermer et garder le son original</button>
         </div>`;
-      (getPlayerContainer() || document.body).appendChild(overlay);
+      (document.querySelector(".html5-video-player") || document.body).appendChild(overlay);
+      overlay.querySelector(".vocalis-close").addEventListener("click", hideOverlay);
     }
 
+    overlay.querySelector(".vocalis-card").classList.toggle("error", error);
     overlay.querySelector(".vocalis-title").textContent = title;
     overlay.querySelector(".vocalis-subtitle").textContent = subtitle || "";
-    overlay.querySelector(".vocalis-note").textContent =
-      "Vocalis v0.1 — le moteur de séparation audio arrive en v0.3. " +
-      "En attendant, ce pipeline est validé étape par étape (voir docs/ROADMAP.md).";
+    overlay.querySelector(".vocalis-close").style.display = closable ? "" : "none";
+    overlay.querySelector(".vocalis-note").textContent = error
+      ? "La vidéo reste lisible avec son son d'origine."
+      : "Vocalis v0.2 — pipeline audio validé, modèle de séparation en v0.3.";
 
     const fill = overlay.querySelector(".vocalis-progress-fill");
-    if (progressPct == null) {
+    if (pct == null) {
       fill.classList.add("indeterminate");
       fill.style.width = "";
     } else {
       fill.classList.remove("indeterminate");
-      fill.style.width = `${progressPct}%`;
+      fill.style.width = pct + "%";
     }
-
-    state.overlay = overlay;
   }
 
   function hideOverlay() {
     document.getElementById("vocalis-overlay")?.remove();
-    state.overlay = null;
-    if (state.overlayTimer) {
-      clearTimeout(state.overlayTimer);
-      state.overlayTimer = null;
-    }
   }
 
   /* ------------------------------------------------------------------ */
-  /* Barre « son traité » (au niveau de la barre rouge YouTube)          */
+  /* Barre « son traité »                                                */
   /* ------------------------------------------------------------------ */
 
-  /**
-   * Affiche les zones de son déjà traitées/mises en cache.
-   * `ranges` = liste de [début, fin] en secondes (v0.2+).
-   * En v0.1 la barre existe mais reste vide.
-   */
   function updateBufferBar(ranges = [], duration = 0) {
     const anchor = document.querySelector(".ytp-progress-bar");
     if (!anchor) return;
 
     let bar = document.getElementById("vocalis-bufferbar");
+    if (!ranges.length || !duration) {
+      bar?.remove();
+      return;
+    }
     if (!bar) {
       bar = document.createElement("div");
       bar.id = "vocalis-bufferbar";
-      bar.title = "Vocalis : parties de la vidéo dont le son est déjà traité";
+      bar.title = "Vocalis : son déjà préparé (retour arrière instantané)";
       anchor.parentElement.appendChild(bar);
     }
 
     bar.replaceChildren();
-    if (!duration) return;
     for (const [start, end] of ranges) {
       const seg = document.createElement("div");
       seg.className = "vocalis-bufferbar-seg";
-      seg.style.left = `${(start / duration) * 100}%`;
-      seg.style.width = `${Math.max(0, ((end - start) / duration) * 100)}%`;
+      seg.style.left = (start / duration) * 100 + "%";
+      seg.style.width = Math.max(0, ((end - start) / duration) * 100) + "%";
       bar.appendChild(seg);
     }
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Cache                                                               */
-  /* ------------------------------------------------------------------ */
-
-  /**
-   * v0.2 : videra le cache IndexedDB des segments audio de la vidéo courante.
-   * Règle produit : le cache vit tant qu'on reste sur la vidéo (retour en
-   * arrière = relecture instantanée), il est purgé dès qu'on la quitte.
-   */
-  function purgeCache() {
-    // TODO(v0.2) : indexedDB.deleteDatabase / suppression des clés videoId:*
+  function hideBufferBar() {
+    document.getElementById("vocalis-bufferbar")?.remove();
   }
 
   /* ------------------------------------------------------------------ */
-  /* Activation / désactivation                                          */
+  /* Cycle de vie du moteur + cache                                      */
   /* ------------------------------------------------------------------ */
+
+  async function teardown({ purge = false } = {}) {
+    const engine = state.engine;
+    state.engine = null;
+    engine?.destroy();
+    hideOverlay();
+    hideBufferBar();
+    state.status = { phase: null, pct: null, notice: null };
+    if (purge && state.currentVideoId) {
+      await VocalisIDB.deleteVideo(state.currentVideoId).catch(() => {});
+    }
+    state.currentVideoId = null;
+  }
+
+  async function startPipeline() {
+    const video = getVideoElement();
+    if (!video) return;
+
+    const engine = new VocalisEngine(video, {
+      onPhase: (name, pct, info) => {
+        state.status.phase = name;
+        state.status.pct = pct;
+        if (!state.enabled) return;
+        if (name === "response") {
+          showOverlay({ title: "Lecture du lecteur YouTube…", pct: null });
+        } else if (name === "download") {
+          showOverlay({
+            title: "Téléchargement de l'audio…",
+            subtitle:
+              pct != null
+                ? `${pct} %` + (info ? ` — ${MB(info.received)} / ${MB(info.total)}` : "")
+                : "Connexion au flux audio…",
+            pct,
+          });
+        } else if (name === "decode") {
+          showOverlay({ title: "Analyse de l'audio…", pct: null });
+        } else if (name === "prepare") {
+          showOverlay({ title: "Préparation du son…", subtitle: `${pct ?? 0} %`, pct });
+          if (pct != null && engine.duration) {
+            updateBufferBar([[0, (pct / 100) * engine.duration]], engine.duration);
+          }
+        }
+      },
+      onError: (msg) => {
+        state.status.notice = msg;
+        if (state.enabled) {
+          showOverlay({ title: msg, subtitle: "", error: true, closable: true, pct: null });
+        }
+      },
+      onNotice: (msg) => {
+        state.status.notice = msg;
+      },
+      onReady: (duration) => {
+        state.currentVideoId = engine.videoId;
+        hideOverlay();
+        updateBufferBar([[0, duration]], duration);
+        if (state.enabled) engine.activate();
+      },
+    });
+
+    state.engine = engine;
+    await engine.start();
+  }
 
   function setEnabled(enabled) {
     state.enabled = enabled;
-
     chrome.runtime.sendMessage({ type: "vocalis:badge", on: enabled }).catch(() => {});
 
-    if (enabled) {
-      const video = getVideoElement();
-      showOverlay({
-        title: video ? "Préparation du son…" : "En attente du lecteur vidéo…",
-        subtitle: video
-          ? "La musique de fond sera retirée, les voix conservées."
-          : "Ouvre une vidéo puis réactive Vocalis.",
-      });
-      // v0.1 : pas encore de moteur, on informe au bout de quelques secondes.
-      state.overlayTimer = setTimeout(() => {
-        // L'overlay reste visible : c'est l'emplacement du futur écran de
-        // chargement (barre de progression réelle à partir de la v0.2).
-      }, 2500);
-    } else {
+    if (!enabled) {
+      // On garde le cache (re-activation instantanée) ; il sera purgé
+      // quand on quittera la vidéo.
+      state.engine?.deactivate();
       hideOverlay();
-      purgeCache();
+      hideBufferBar();
+      return;
+    }
+
+    if (state.engine?.started) {
+      updateBufferBar([[0, state.engine.duration]], state.engine.duration);
+      state.engine.activate();
+    } else if (!state.engine || !state.engine.running) {
+      // Jamais lancé, ou précédent essai en erreur : on (re)part.
+      startPipeline();
     }
   }
 
   /* ------------------------------------------------------------------ */
-  /* Messages & navigation                                               */
+  /* Messages, navigation SPA, purge                                     */
   /* ------------------------------------------------------------------ */
 
-  chrome.runtime.onMessage.addListener((msg) => {
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg?.type === "vocalis:set-enabled") {
       setEnabled(!!msg.enabled);
     }
-    // v0.2 : messages d'avancement du pipeline → barre de progression + buffer bar.
+    if (msg?.type === "vocalis:get-status") {
+      sendResponse({
+        enabled: state.enabled,
+        started: !!state.engine?.started,
+        active: !!state.engine?.active,
+        phase: state.status.phase,
+        pct: state.status.pct,
+        notice: state.status.notice,
+        videoId: state.currentVideoId,
+      });
+    }
   });
 
-  // YouTube est une single-page app : ces événements signalent qu'on change
-  // de page/vidéo sans recharger l'onglet. C'est LÀ qu'on purge le cache.
-  document.addEventListener("yt-navigate-start", () => {
-    purgeCache();
-    hideOverlay();
+  // Le pont main-world signale tout changement de vidéo (SPA) :
+  // on purge le cache de l'ancienne et on repart si Vocalis est actif.
+  window.addEventListener("message", async (e) => {
+    if (e.source !== window || e.data?.source !== "vocalis-bridge") return;
+    if (e.data.type !== "video-changed") return;
+    const { from, to } = e.data.payload || {};
+    if (!from || from === to) return;
+
+    await teardown({ purge: true }); // règle produit : quitter la vidéo = vider le cache
+    if (state.enabled && to) startPipeline();
   });
+
   window.addEventListener("pagehide", () => {
-    purgeCache();
+    if (state.currentVideoId) VocalisIDB.deleteVideo(state.currentVideoId).catch(() => {});
   });
-
-  // v0.2 : surveiller aussi les changements de vidéo à l'intérieur du lecteur
-  // (clic sur une vidéo suivante dans la playlist auto) via MutationObserver
-  // sur <video> et l'URL courante.
 })();

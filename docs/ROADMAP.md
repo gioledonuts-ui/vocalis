@@ -11,18 +11,23 @@ Chaque version = une **Release GitHub** (c'est ce que récupère
 - [x] Mise à jour locale en un clic (`METTRE_A_JOUR.bat` / `.sh`).
 - [x] Documentation : architecture, roadmap, comparatif des modèles.
 
-## ⏳ v0.2 — Pipeline audio « bout en bout », sans modèle
+## ✅ v0.2 — Pipeline audio « bout en bout », sans modèle
 Valider toute la tuyauterie avec le son **original** (identité, pas encore
 de séparation) :
-- [ ] Extraction du flux audio adaptatif depuis `ytInitialPlayerResponse`.
-- [ ] Découpage en segments + relecture via Web Audio, vidéo muette.
-- [ ] Synchronisation robuste sur `video.currentTime` (seek, pause, vitesse ×2…).
-- [ ] Cache IndexedDB complet : conservation pendant la vidéo, purge à la sortie.
-- [ ] Overlay avec vraie progression (secondes traitées / pré-chargement).
-- [ ] Barre « son traité » alimentée en direct au-dessus de la barre YouTube.
+- [x] Extraction du flux audio adaptatif (pont main-world →
+      `getPlayerResponse()`, meilleur débit audio).
+- [x] Découpage en segments 10 s (PCM16) + relecture via Web Audio, vidéo muette.
+- [x] Synchronisation robuste sur `video.currentTime` (seek, pause, mise en
+      tampon, vitesse ×2 → son original, re-sync anti-dérive).
+- [x] Cache IndexedDB complet : conservation pendant la vidéo, purge à la
+      sortie (+ plafond ~1,5 Go, fenêtre RAM ~20 min).
+- [x] Overlay avec vraie progression (téléchargement %/Mo, analyse, préparation).
+- [x] Barre « son traité » alimentée en direct au-dessus de la barre YouTube.
+- [x] Popup vivant (phase + progression en direct).
 
-> Pourquoi cette étape : si le pipeline fonctionne avec l'audio original,
-> l'ajout du modèle en v0.3 ne touchera qu'un seul bloc (le traitement).
+> Limites assumées : décodage complet en mémoire (vidéos > 2 h gourmandes),
+> pas de time-stretch (vitesse ≠ 1 → son original), directs non gérés.
+> La v0.3 remplace l'étape « identité » par le modèle, segment par segment.
 
 ## ⏳ v0.3 — La musique disparaît vraiment
 - [ ] Téléchargement du modèle ONNX au premier lancement (asset de release).
