@@ -27,6 +27,23 @@ self.VocalisStreamer = (() => {
   const SEG = 10;                     // durée d'un segment émis (s)
   const SR = 44100;                   // fréquence native de l'itag 140
   const LOOKAHEAD_S = 90;             // avance max de téléchargement sur le traitement
+
+  /**
+   * Synthétise un AudioSpecificConfig (2 octets, ISO 14496-3) pour AAC-LC
+   * si la boîte esds de l'atome moov MP4 ne l'expose pas directement.
+   */
+  function makeAudioSpecificConfig(sampleRate, channels) {
+    const freqs = [
+      96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350,
+    ];
+    let sfi = freqs.indexOf(sampleRate);
+    if (sfi === -1) sfi = 4; // 44100 Hz par défaut
+    const aot = 2; // AAC-LC
+    const byte1 = (aot << 3) | ((sfi >> 1) & 0x07);
+    const byte2 = ((sfi & 0x01) << 7) | ((channels & 0x0f) << 3);
+    return new Uint8Array([byte1, byte2]);
+  }
+
   class Streamer {
     constructor(url, hooks) {
       this.url = url;
@@ -149,15 +166,21 @@ self.VocalisStreamer = (() => {
       let description;
       try {
         const trak = this.mp4.getTrackById(track.id);
-        const entry = trak.mdia.minf.stbl.stsd.entries[0];
+        const entry = trak?.mdia?.minf?.stbl?.stsd?.entries?.[0];
         const descs = entry?.esds?.esd?.descs || [];
         const dcd = descs.find((d) => d.tag === 3) || entry?.esds?.esd;
         const inner = (dcd?.descs || descs).find((d) => d.tag === 5);
         if (inner?.data) description = inner.data;
-      } catch { /* description absente : configure échouera → legacy */ }
+      } catch { /* description absente : synthèse ci-dessous */ }
 
-      if (typeof AudioDecoder === "undefined" || !description) {
-        this.hooks.onError && this.hooks.onError("WebCodecs/description AAC indisponible.");
+      // Filet de sécurité universel : si la boîte esds est absente/incomplète,
+      // on synthétise la config AAC-LC standard (2 octets ISO 14496-3).
+      if (!description) {
+        description = makeAudioSpecificConfig(sampleRate, channels);
+      }
+
+      if (typeof AudioDecoder === "undefined") {
+        this.hooks.onError && this.hooks.onError("WebCodecs (AudioDecoder) indisponible.");
         return;
       }
 

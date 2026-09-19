@@ -4,6 +4,18 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.4.10] — 2026-09-19
+
+### Corrigé
+- « Compiling or instantiating WebAssembly module violates Content Security policy directive » :
+  ajout de la directive CSP obligatoire Manifest V3 pour WebAssembly
+  (`extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"`).
+  Chrome autorise désormais la compilation du moteur WebGPU/WASM du modèle IA.
+- « WebCodecs/description AAC indisponible » : si la boîte MP4 `esds`
+  est incomplète dans le flux YouTube Android, Vocalis synthétise
+  automatiquement l'AudioSpecificConfig standard (ISO 14496-3, 2 octets),
+  permettant le décodage fluide et sans bascule en mode complet.
+
 ## [0.4.9] — 2026-09-19
 
 ### Corrigé
