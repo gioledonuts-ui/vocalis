@@ -261,6 +261,12 @@ self.VocalisEngine = (() => {
       this.hooks.onLog && this.hooks.onLog("WebCodecs dispo (page) : " +
         (typeof AudioDecoder !== "undefined"));
 
+      if (src.ua) {
+        await chrome.runtime
+          .sendMessage({ type: "vocalis:set-stream-ua", ua: src.ua })
+          .catch(() => {});
+      }
+
       if (incrOk) {
         this.mode = "incr";
         this.incrFmt = src.m4a;
@@ -291,13 +297,14 @@ self.VocalisEngine = (() => {
       this.streamStarted = true;
     }
 
-    _fallback() {
+    _fallback(reason) {
       if (this.started || this.mode !== "incr") return;
-      this.hooks.onLog && this.hooks.onLog("bascule mode complet (flux fragmenté en échec)");
+      this.hooks.onLog &&
+        this.hooks.onLog("bascule mode complet (" + (reason || "flux fragmenté en échec") + ")");
       this.mode = "legacy-pending";
       this.worker.postMessage({ type: "stream-stop" });
       this.hooks.onNotice &&
-        this.hooks.onNotice("Flux fragmenté indisponible ici → bascule en téléchargement complet.");
+        this.hooks.onNotice("Flux fragmenté indisponible (" + (reason || "erreur") + ") → bascule en téléchargement complet.");
       const r = this.startResolve;
       this.startResolve = null;
       r && r(); // start() enchaînera sur startLegacy
@@ -417,7 +424,9 @@ self.VocalisEngine = (() => {
         this.downloadedSec = msg.seconds || 0;
         this.phase("download", msg.pct, { seconds: msg.seconds });
       } else if (msg.type === "stream-error") {
-        this._fallback();
+        this.hooks.onLog &&
+          this.hooks.onLog("flux fragmenté en échec : " + (msg.message || "inconnu"));
+        this._fallback(msg.message);
       } else if (msg.type === "done") {
         if (this.processed.has(msg.index)) { this.pump(); return; }
         this.onChunkDone(msg.index, new Float32Array(msg.left), new Float32Array(msg.right));

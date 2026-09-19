@@ -106,16 +106,14 @@ self.VocalisStreamer = (() => {
       this.ctl = new AbortController();
       const timer = setTimeout(() => this.ctl.abort(), 20000); // tranche qui traîne = erreur propre
       const headers = { Range: `bytes=${start}-${end}` };
-      // Certains clients (visionOS…) exigent le même User-Agent au
-      // téléchargement qu'à la demande player ; le worker vit en contexte
-      // extension, où ce header est autorisé.
-      if (this.hooks.ua) headers["User-Agent"] = this.hooks.ua;
       const resp = await fetch(this.url, {
         headers,
         signal: this.ctl.signal,
       });
       clearTimeout(timer);
-      if (!resp.ok && resp.status !== 206) throw new Error("HTTP " + resp.status);
+      if (!resp.ok && resp.status !== 206) {
+        throw new Error("HTTP " + resp.status + (resp.statusText ? " " + resp.statusText : ""));
+      }
       if (!this.total) {
         const cr = resp.headers.get("content-range");
         const m = cr && cr.match(/\/(\d+)$/);

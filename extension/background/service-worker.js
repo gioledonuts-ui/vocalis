@@ -49,6 +49,39 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true; // réponse asynchrone
   }
 
+  // Définit le User-Agent sortant pour googlevideo.com afin d'éviter le rejet
+  // 403 CDN (YouTube vérifie la concordance entre le client et le User-Agent).
+  if (msg.type === "vocalis:set-stream-ua") {
+    const ua = msg.ua || "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip";
+    chrome.declarativeNetRequest
+      .updateDynamicRules({
+        removeRuleIds: [1001],
+        addRules: [
+          {
+            id: 1001,
+            priority: 1,
+            action: {
+              type: "modifyHeaders",
+              requestHeaders: [
+                {
+                  header: "user-agent",
+                  operation: "set",
+                  value: ua,
+                },
+              ],
+            },
+            condition: {
+              urlFilter: "googlevideo.com",
+              resourceTypes: ["xmlhttprequest", "other", "media"],
+            },
+          },
+        ],
+      })
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+
   // Ping simple pour vérifier que tout le monde se parle.
   if (msg.type === "vocalis:ping") {
     sendResponse({ ok: true, version: chrome.runtime.getManifest().version });

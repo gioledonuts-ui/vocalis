@@ -4,6 +4,22 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.4.9] — 2026-09-19
+
+### Corrigé
+- « no available backend found / previous call to initWasm failed » :
+  1. `ort.env.wasm.wasmPaths` configuré sous forme d'objet explicite pointant
+     vers `ort-wasm-simd-threaded.jsep.mjs` et `jsep.wasm` (au lieu d'un simple
+     dossier qui cherchait `asyncify.mjs` absent).
+  2. Création de l'alias `ort-wasm-simd-threaded.asyncify.mjs` vers `jsep.mjs`
+     pour verrouiller tous les chemins d'accès ONNX Runtime.
+  3. Verrou unique `readyPromise` sur le chargement du modèle IA pour empêcher
+     les appels concurrents (`init` et `stream` en parallèle) qui corrompaient
+     l'état interne d'ONNX Runtime.
+- Téléchargement audio Android : ajout de la permission `declarativeNetRequest`
+  qui injecte automatiquement le `User-Agent` Android officiel sur toutes les
+  requêtes vers `googlevideo.com`, éliminant le rejet 403 CDN.
+
 ## [0.4.8] — 2026-09-19
 
 ### Corrigé

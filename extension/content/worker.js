@@ -23,7 +23,11 @@ import * as ort from "../lib/ort/ort.webgpu.min.mjs";
 import { DemucsProcessor } from "../lib/demucs-web/processor.js";
 import "../content/streamer.js"; // expose self.VocalisStreamer
 
-ort.env.wasm.wasmPaths = new URL("../lib/ort/", import.meta.url).href;
+ort.env.wasm.wasmPaths = {
+  mjs: new URL("../lib/ort/ort-wasm-simd-threaded.jsep.mjs", import.meta.url).href,
+  wasm: new URL("../lib/ort/ort-wasm-simd-threaded.jsep.wasm", import.meta.url).href,
+};
+ort.env.wasm.numThreads = 1;
 ort.env.logLevel = "error";
 
 const MODEL_URL =
@@ -92,13 +96,21 @@ async function downloadModel() {
 
 let processor = null;
 let doneCount = 0;
-let initStarted = false;
 let backend = null;
 let firstSep = true;
+let readyPromise = null;
 
-async function ensureReady() {
-  if (processor) return;
+function ensureReady() {
+  if (processor) return Promise.resolve();
+  if (readyPromise) return readyPromise;
+  readyPromise = doEnsureReady().catch((err) => {
+    readyPromise = null;
+    throw err;
+  });
+  return readyPromise;
+}
 
+async function doEnsureReady() {
   /* 1 — fichier local fourni avec l'extension (TELECHARGER_MODELE.bat) */
   let buf = null;
   let source = null;
@@ -128,7 +140,8 @@ async function ensureReady() {
   try {
     await processor.loadModel(buf);
     backend = "webgpu";
-  } catch {
+  } catch (gpuErr) {
+    log("WebGPU non disponible (" + (gpuErr?.message || gpuErr) + "), repli WASM…");
     processor = new DemucsProcessor({
       ort,
       sessionOptions: { executionProviders: ["wasm"], graphOptimizationLevel: "basic" },
@@ -205,13 +218,15 @@ self.onmessage = async (e) => {
       await ensureReady();
       post({ type: "ready" });
       pumpSeg();
-    } else if (msg.type === "stream" && !processor && !initStarted) {
-      initStarted = true;
-      ensureReady().then(() => { post({ type: "ready" }); pumpSeg(); }).catch((e) => {
-        post({ type: "error", message: String((e && e.message) || e) });
-      });
-      startStream(msg.url, msg.fromTime || 0, msg.skip, msg.ua);
     } else if (msg.type === "stream") {
+      ensureReady()
+        .then(() => {
+          post({ type: "ready" });
+          pumpSeg();
+        })
+        .catch((e) => {
+          post({ type: "error", message: String((e && e.message) || e) });
+        });
       startStream(msg.url, msg.fromTime || 0, msg.skip, msg.ua);
     } else if (msg.type === "stream-restart") {
       segQueue.length = 0;
@@ -220,7 +235,7 @@ self.onmessage = async (e) => {
       streamer?.destroy();
       streamer = null;
     } else if (msg.type === "process") {
-      if (!processor) throw new Error("modèle non chargé");
+      if (!processor) await ensureReady();
       const left = new Float32Array(msg.left);
       const right = new Float32Array(msg.right);
       const res = await processor.separate(left, right);
