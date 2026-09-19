@@ -24,20 +24,18 @@
 | **BS-RoFormer / Mel-Band RoFormer** (type UVR) | Excellente sur les voix | Rapide | 50–150 Mo selon variante | À vérifier par checkpoint | Très bons résultats sur voix/narration, plusieurs variantes communautaires |
 | **Spleeter 2 stems** | Moyenne | Rapide | ~30 Mo | MIT | Historique, artefacts audibles ; écarté vu l'exigence qualité |
 
-## Décision de travail (v0.3)
+## Décision actée (v0.3, livrée)
 
-- **Point de départ : `htdemucs`** (Demucs v4 hybride) — MIT, robuste, des
-  exports ONNX existent et le runtime WebGPU sait l'exécuter. C'est le
-  meilleur compromis qualité/vitesse/fiabilité pour démarrer.
-- **Challenger : un checkpoint BS-RoFormer** orienté voix, à benchmarker sur
-  la machine du streamer. S'il est plus rapide à qualité égale ou meilleure,
-  il devient le défaut.
-- `htdemucs_ft` reste une **option « qualité max »** activable dans les
-  réglages (v0.4) pour les configs puissantes.
-
-> ⚠️ À confirmer avant la v0.3 : la licence exacte du checkpoint RoFormer
-> retenu (les poids communautaires ne se valent pas tous) et la présence
-> d'un export ONNX stable.
+- **`htdemucs_embedded.onnx`** (export ONNX de HTDemucs par
+  [demucs-web](https://github.com/timcsy/demucs-web), MIT) : le seul export
+  ONNX de Demucs avec parité vérifiée et chemin onnxruntime-web documenté.
+  Hébergé sur Hugging Face (`timcsy/demucs-web-onnx`), téléchargé au premier
+  lancement, mis en cache IndexedDB.
+- Exécution WebGPU (machine cible RTX 30/40) avec repli WASM.
+- **Challenger v0.4 : BS-RoFormer / Mel-Band RoFormer en ONNX** (ex. exports
+  HF `silverdaw/*`, `bgkb/bs_polarformer` — SDR ~11) à benchmarker sur la
+  machine du streamer ; s'il gagne à qualité égale, il devient le défaut ou
+  une option « qualité max ».
 
 ## Machine cible (décidé)
 

@@ -144,11 +144,39 @@
           });
         } else if (name === "decode") {
           showOverlay({ title: "Analyse de l'audio…", pct: null });
+        } else if (name === "resample") {
+          showOverlay({ title: "Mise au format du modèle (44,1 kHz)…", pct: null });
+        } else if (name === "model") {
+          showOverlay({
+            title: info?.cached
+              ? "Chargement du modèle IA depuis ton PC…"
+              : "Téléchargement du modèle IA (une seule fois, ~172 Mo)…",
+            subtitle: info?.cached ? "" : `${pct ?? 0} % — ensuite tout reste sur ton PC`,
+            pct: info?.cached ? null : pct,
+          });
         } else if (name === "prepare") {
-          showOverlay({ title: "Préparation du son…", subtitle: `${pct ?? 0} %`, pct });
-          if (pct != null && engine.duration) {
-            updateBufferBar([[0, (pct / 100) * engine.duration]], engine.duration);
-          }
+          showOverlay({
+            title: "Séparation voix / musique…",
+            subtitle: `Pré-chargement : ${pct ?? 0} % — la lecture démarre dès que c'est prêt`,
+            pct,
+          });
+        }
+      },
+      onProcessed: (ranges, duration) => {
+        updateBufferBar(ranges, duration);
+      },
+      onStall: (pct) => {
+        state.status.phase = "stall";
+        showOverlay({
+          title: "Traitement de cette zone…",
+          subtitle: `Vidéo traitée à ${pct} % — un instant.`,
+          pct: null,
+        });
+      },
+      onStallClear: () => {
+        if (state.status.phase === "stall") {
+          state.status.phase = null;
+          hideOverlay();
         }
       },
       onError: (msg) => {
@@ -211,6 +239,7 @@
         pct: state.status.pct,
         notice: state.status.notice,
         videoId: state.currentVideoId,
+        processedPct: state.engine?.status().processedPct ?? null,
       });
     }
   });

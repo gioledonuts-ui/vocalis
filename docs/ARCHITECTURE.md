@@ -136,12 +136,25 @@ Avantages :
   qui est de toute façon ce que demande le modèle), vitesse ≠ ×1 → retour au
   son original, directs non gérés.
 
-### Insertion du modèle en v0.3
+### Réalité v0.3 (séparation effective)
 
-Le modèle ONNX s'insère entre le décodage et la mise en cache : chaque
-segment décodé passe dans le modèle (voix uniquement) avant d'être mis en
-cache/rejoué. Le pré-chargement devient alors réel : on traite d'abord les
-N premières secondes, la lecture démarre, le reste suit en arrière-plan.
+- Worker dédié (`content/worker.js`, module ES) : onnxruntime-web 1.30
+  embarqué dans `extension/lib/ort/` (~41 Mo, justifié : notre sandbox ne
+  peut pas uploader d'assets binaires sur les releases, donc tout doit vivre
+  dans le dépôt) + code de pré/post-traitement demucs-web (MIT).
+- Modèle `htdemucs_embedded.onnx` (~172 Mo, HTDemucs exporté ONNX, parité
+  vérifiée par demucs-web) téléchargé depuis Hugging Face au premier
+  lancement, puis servi depuis IndexedDB (`vocalis-model`). Jamais dans git.
+- EP : `['webgpu','wasm']` — WebGPU sur le GPU du streamer (RTX 30/40),
+  repli WASM simple thread sinon.
+- Audio remis à 44,1 kHz stéréo (OfflineAudioContext) avant traitement.
+- Blocs de 30 s : chaque bloc part au worker, la sortie « vocals » est
+  convertie en PCM16, mise en RAM + IndexedDB, puis rejouée. Le recouvrement
+  entre segments internes du modèle (overlap-add + fenêtre triangulaire) est
+  géré par demucs-web : pas de clic aux jointures.
+- Pré-chargement 60 s → lecture ; le reste suit en arrière-plan. Seek vers
+  une zone non traitée : la file de traitement est réordonnée sur la tête de
+  lecture et un écran « traitement… » s'affiche le temps du bloc courant.
 
 ## Composants du dépôt
 

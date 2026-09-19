@@ -1,32 +1,32 @@
 /**
- * Vocalis — moteur audio v0.2 (pipeline complet, SANS modèle de séparation)
+ * Vocalis — moteur audio v0.3 : la musique disparaît vraiment
  *
- * Étapes :
- *  1. Récupère le playerResponse via le pont main-world (bridge.js) ;
- *  2. Choisit le meilleur flux audio adaptatif (le plus haut débit) ;
- *  3. Le télécharge (progression en streaming) ;
- *  4. Le décode (decodeAudioData) ;
- *  5. Le découpe en segments de 10 s (PCM 16 bits) → mémoire + IndexedDB ;
- *  6. Rejoue le son via Web Audio, vidéo en sourdine, synchronisation
- *     permanente sur video.currentTime (seek, pause, mise en tampon…).
+ * Pipeline :
+ *  1. playerResponse (pont main-world) → meilleur flux audio ;
+ *  2. téléchargement (progression) + décodage ;
+ *  3. remise à 44,1 kHz stéréo (le format du modèle) ;
+ *  4. worker IA (HTDemucs ONNX, WebGPU/WASM) : chaque bloc de 30 s est
+ *     séparé, on ne garde que les VOIX ;
+ *  5. pré-chargement : la lecture démarre dès ~60 s de voix prêtes, le
+ *     reste se traite en arrière-plan pendant qu'on regarde ;
+ *  6. cache IndexedDB (blocs de 30 s, PCM16) : retour arrière instantané,
+ *     purge en quittant la vidéo ;
+ *  7. relecture Web Audio synchronisée sur video.currentTime.
  *
- * En v0.2 le « traitement » est l'identité (son original) : on valide toute
- * la tuyauterie. En v0.3, un modèle ONNX s'insérera entre l'étape 4 et 5.
- *
- * Limites connues de la v0.2 (documentées) :
- *  - décodage complet en mémoire : vidéos très longues (> 2 h) gourmandes ;
- *  - vitesse de lecture ≠ 1 : on repasse au son original (pas de time-stretch) ;
- *  - directs (lives) non gérés.
+ * Si on avance dans une zone pas encore traitée : écran « traitement »
+ * jusqu'à ce que la zone soit prête (file prioritaire sur la tête de lecture).
  */
 
 self.VocalisEngine = (() => {
   "use strict";
 
-  const SEG = 10;                 // durée d'un segment (s)
-  const SCHEDULE_AHEAD = 45;      // secondes d'audio programmées d'avance
-  const MEM_WINDOW = 120;         // segments gardés en RAM (~20 min)
-  const CACHE_CAP = 1_500_000_000; // plafond IndexedDB par vidéo (~1,5 Go)
-  const DRIFT_MAX = 0.09;         // écart audio/vidéo toléré avant re-sync (s)
+  const CHUNK = 30;                 // durée d'un bloc traité (s)
+  const SR = 44100;                 // fréquence du modèle
+  const PRELOAD_S = 60;             // secondes de voix prêtes avant lecture
+  const SCHEDULE_AHEAD = 60;        // secondes d'audio programmées d'avance
+  const MEM_WINDOW = 60;            // blocs gardés en RAM (~30 min)
+  const CACHE_CAP = 1_500_000_000;  // plafond IndexedDB par vidéo (~1,5 Go)
+  const DRIFT_MAX = 0.09;           // écart audio/vidéo toléré (s)
 
   class Engine {
     constructor(video, hooks = {}) {
@@ -34,34 +34,36 @@ self.VocalisEngine = (() => {
       this.hooks = hooks;
 
       this.aborted = false;
-      this.running = false;   // un start() est en cours
-      this.started = false;   // pipeline terminé, segments prêts
-      this.active = false;    // relecture par Vocalis en cours
-      this.stalled = false;   // vidéo en tampon (« waiting »)
+      this.running = false;
+      this.started = false;
+      this.active = false;
+      this.stalled = false;
       this.rateNoticeShown = false;
 
       this.videoId = null;
       this.duration = 0;
-      this.sampleRate = 48000;
-      this.channels = 2;
+      this.nChunks = 0;
 
-      this.mem = new Map();     // index -> Int16Array (PCM entrelacé)
-      this.buffers = new Map(); // index -> AudioBuffer (pour Web Audio)
+      this.audio44 = null;          // { left, right } Float32 masters
+      this.mem = new Map();         // index -> Int16Array (voix, PCM16 entrelacé)
+      this.buffers = new Map();     // index -> AudioBuffer
+      this.processed = new Set();
+
+      this.worker = null;
+      this.workerReady = false;
+      this.workerBusy = false;
+      this.queue = [];
+      this.pending = new Map();     // index -> resolve()
 
       this.ctx = null;
       this.gain = null;
       this.sources = [];
-      this.base = null;         // { ctx0, vid0 } pour le contrôle de dérive
-      this.gen = 0;             // garde anti-reschedules concurrents
+      this.base = null;
+      this.gen = 0;
       this.watchdog = null;
-
       this.cacheEnabled = true;
       this._bound = null;
     }
-
-    /* ---------------------------------------------------------- */
-    /* Pipeline                                                    */
-    /* ---------------------------------------------------------- */
 
     phase(name, pct = null, info = null) {
       this.hooks.onPhase && this.hooks.onPhase(name, pct, info);
@@ -97,9 +99,13 @@ self.VocalisEngine = (() => {
       return audio[0];
     }
 
+    /* ---------------------------------------------------------- */
+    /* Pipeline                                                    */
+    /* ---------------------------------------------------------- */
+
     async start() {
       this.running = true;
-      /* 1 — playerResponse */
+
       this.phase("response");
       const pr = await this.getPlayerResponse();
       if (this.aborted) return;
@@ -108,21 +114,17 @@ self.VocalisEngine = (() => {
         return;
       }
       if (pr.videoDetails.isLive) {
-        this.hooks.onError &&
-          this.hooks.onError("Les directs ne sont pas encore gérés (v0.2).");
+        this.hooks.onError && this.hooks.onError("Les directs ne sont pas encore gérés (v0.3).");
         return;
       }
-
-      /* 2 — format audio */
       const fmt = this.pickFormat(pr);
       if (!fmt) {
-        this.hooks.onError &&
-          this.hooks.onError("Aucun flux audio accessible (vidéo protégée ?).");
+        this.hooks.onError && this.hooks.onError("Aucun flux audio accessible (vidéo protégée ?).");
         return;
       }
       this.videoId = pr.videoDetails.videoId;
 
-      /* 3 — téléchargement (progression réelle) */
+      /* Téléchargement */
       this.phase("download", 0);
       let arrayBuf;
       try {
@@ -138,18 +140,16 @@ self.VocalisEngine = (() => {
           if (this.aborted) return;
           chunks.push(value);
           received += value.length;
-          if (total) {
-            this.phase("download", Math.round((received / total) * 100), { received, total });
-          }
+          if (total) this.phase("download", Math.round((received / total) * 100), { received, total });
         }
         arrayBuf = await new Blob(chunks).arrayBuffer();
-      } catch (err) {
+      } catch {
         this.hooks.onError && this.hooks.onError("Téléchargement de l'audio impossible.");
         return;
       }
       if (this.aborted) return;
 
-      /* 4 — décodage */
+      /* Décodage */
       this.phase("decode");
       let decoded;
       const probe = new AudioContext();
@@ -162,89 +162,205 @@ self.VocalisEngine = (() => {
         probe.close();
       }
       if (this.aborted) return;
-
       this.duration = decoded.duration;
-      this.sampleRate = decoded.sampleRate;
-      this.channels = decoded.numberOfChannels;
+      this.nChunks = Math.max(1, Math.ceil(this.duration / CHUNK));
+      this.cacheEnabled = this.nChunks * CHUNK * SR * 2 * 2 <= CACHE_CAP;
 
-      /* 5 — découpage en segments PCM16 + cache */
-      this.phase("prepare", 0);
-      const n = Math.max(1, Math.ceil(this.duration / SEG));
-      const segBytes = SEG * this.sampleRate * this.channels * 2;
-      this.cacheEnabled = n * segBytes <= CACHE_CAP;
-
-      const chans = [];
-      for (let c = 0; c < this.channels; c++) chans.push(decoded.getChannelData(c));
-      const totalSamples = chans[0].length;
-      decoded = null; // libère au plus tôt
-
-      for (let i = 0; i < n; i++) {
-        if (this.aborted) return;
-        const off0 = Math.round(i * SEG * this.sampleRate);
-        const len = Math.min(Math.round(SEG * this.sampleRate), totalSamples - off0);
-        if (len <= 0) break;
-        const pcm = new Int16Array(len * this.channels);
-        let p = 0;
-        for (let s = 0; s < len; s++) {
-          for (let c = 0; c < this.channels; c++) {
-            const v = chans[c][off0 + s];
-            pcm[p++] = v < -1 ? -32768 : v > 1 ? 32767 : Math.round(v * 32767);
-          }
-        }
-        this.mem.set(i, pcm);
-        if (this.cacheEnabled) {
-          // Écriture IndexedDB en arrière-plan (le segment reste en RAM).
-          VocalisIDB.put({
-            key: `${this.videoId}:${i}`,
-            videoId: this.videoId,
-            index: i,
-            pcm,
-            sampleRate: this.sampleRate,
-            channels: this.channels,
-          }).catch(() => { this.cacheEnabled = false; });
-        }
-        if (i % 5 === 0) {
-          this.phase("prepare", Math.round(((i + 1) / n) * 100));
-          await new Promise((r) => setTimeout(r, 0)); // laisse respirer l'UI
-        }
+      /* 44,1 kHz stéréo */
+      this.phase("resample");
+      let left, right;
+      if (decoded.sampleRate === SR && decoded.numberOfChannels >= 2) {
+        left = decoded.getChannelData(0);
+        right = decoded.getChannelData(1);
+      } else if (decoded.numberOfChannels === 1) {
+        const off = new OfflineAudioContext(2, Math.ceil(decoded.duration * SR), SR);
+        const src = off.createBufferSource();
+        src.buffer = decoded;
+        src.connect(off.destination);
+        src.start();
+        const rendered = await off.startRendering();
+        left = rendered.getChannelData(0);
+        right = left;
+        decoded = null;
+      } else {
+        const off = new OfflineAudioContext(2, Math.ceil(decoded.duration * SR), SR);
+        const src = off.createBufferSource();
+        src.buffer = decoded;
+        src.connect(off.destination);
+        src.start();
+        const rendered = await off.startRendering();
+        left = rendered.getChannelData(0);
+        right = rendered.getChannelData(1);
+        decoded = null;
       }
+      if (this.aborted) return;
+      this.audio44 = { left, right };
+
+      /* Worker IA */
+      this.phase("model");
+      await this.initWorker().catch(() => {});
+      if (this.aborted || this.fatal) return;
+
+      /* Pré-chargement : traiter jusqu'à PRELOAD_S puis lancer la lecture */
+      this.phase("prepare", 0);
+      await new Promise((resolve) => {
+        this.preloadResolve = resolve;
+        this.setPriority(0);
+      });
       if (this.aborted) return;
 
       this.started = true;
       this.hooks.onReady && this.hooks.onReady(this.duration);
     }
 
-    /* ---------------------------------------------------------- */
-    /* Relecture synchronisée                                      */
-    /* ---------------------------------------------------------- */
-
-    lastIndex() {
-      return Math.max(0, Math.ceil(this.duration / SEG) - 1);
+    initWorker() {
+      return new Promise((resolve, reject) => {
+        const w = new Worker(chrome.runtime.getURL("content/worker.js"), { type: "module" });
+        this.worker = w;
+        w.onmessage = (e) => this.onWorkerMessage(e.data, resolve);
+        w.onerror = (e) => {
+          this.fatal = true;
+          this.hooks.onError &&
+            this.hooks.onError("Échec du moteur IA : " + (e.message || "worker"));
+          reject(e);
+        };
+        w.postMessage({ type: "init" });
+      });
     }
+
+    onWorkerMessage(msg, initResolve) {
+      if (this.aborted) return;
+      if (msg.type === "model-download") {
+        this.phase("model", msg.pct, msg);
+      } else if (msg.type === "ready") {
+        this.workerReady = true;
+        initResolve && initResolve();
+      } else if (msg.type === "done") {
+        this.onChunkDone(msg.index, new Float32Array(msg.left), new Float32Array(msg.right));
+        } else if (msg.type === "error") {
+        if (!this.workerReady) {
+          this.hooks.onError && this.hooks.onError("Échec du modèle IA : " + msg.message);
+          initResolve && initResolve(); // débloque start(), qui verra started=false
+          this.fatal = true;
+          return;
+        }
+        // Échec sur un bloc : on le saute (trou de son ponctuel).
+        const idx = this.currentProcessing;
+        this.pending.delete(idx);
+        this.currentProcessing = null;
+        this.workerBusy = false;
+        this.pump();
+      }
+    }
+
+    /* ---------------- File de traitement ---------------- */
+
+    setPriority(fromIdx) {
+      const wanted = [];
+      for (let i = fromIdx; i < this.nChunks; i++) {
+        if (!this.processed.has(i) && !this.pending.has(i) && i !== this.currentProcessing) {
+          wanted.push(i);
+        }
+      }
+      this.queue = wanted;
+      this.pump();
+    }
+
+    pump() {
+      if (this.workerBusy || !this.workerReady || !this.queue.length) return;
+      const idx = this.queue.shift();
+      if (this.processed.has(idx)) { this.pump(); return; }
+      this.workerBusy = true;
+      this.currentProcessing = idx;
+
+      const start = idx * CHUNK * SR;
+      const len = Math.min(CHUNK * SR, this.audio44.left.length - start);
+      const left = new Float32Array(this.audio44.left.subarray(start, start + len));
+      const right = new Float32Array(this.audio44.right.subarray(start, start + len));
+      this.pending.set(idx, true);
+      this.worker.postMessage(
+        { type: "process", index: idx, left: left.buffer, right: right.buffer },
+        [left.buffer, right.buffer]
+      );
+    }
+
+    onChunkDone(idx, left, right) {
+      this.pending.delete(idx);
+      this.currentProcessing = null;
+      this.workerBusy = false;
+
+      /* PCM16 entrelacé */
+      const pcm = new Int16Array(left.length * 2);
+      for (let s = 0; s < left.length; s++) {
+        const l = left[s], r = right[s];
+        pcm[s * 2] = l < -1 ? -32768 : l > 1 ? 32767 : Math.round(l * 32767);
+        pcm[s * 2 + 1] = r < -1 ? -32768 : r > 1 ? 32767 : Math.round(r * 32767);
+      }
+      this.mem.set(idx, pcm);
+      this.processed.add(idx);
+      if (this.cacheEnabled) {
+        VocalisIDB.put({
+          key: `${this.videoId}:${idx}`,
+          videoId: this.videoId,
+          index: idx,
+          pcm,
+          sampleRate: SR,
+          channels: 2,
+        }).catch(() => { this.cacheEnabled = false; });
+      }
+
+      this.hooks.onProcessed && this.hooks.onProcessed(this.ranges(), this.duration);
+
+      /* Pré-chargement atteint ? */
+      if (this.preloadResolve) {
+        const ready = this.processed.size * CHUNK;
+        this.phase("prepare", Math.min(100, Math.round((ready / PRELOAD_S) * 100)));
+        if (ready >= PRELOAD_S || this.processed.size >= this.nChunks) {
+          const r = this.preloadResolve;
+          this.preloadResolve = null;
+          r();
+        }
+      }
+
+      /* Tout est traité : libère les masters */
+      if (this.processed.size >= this.nChunks) this.audio44 = null;
+
+      this.pump();
+    }
+
+    ranges() {
+      const out = [];
+      let s = null;
+      for (let i = 0; i <= this.nChunks; i++) {
+        const ok = i < this.nChunks && this.processed.has(i);
+        if (ok && s === null) s = i * CHUNK;
+        if (!ok && s !== null) {
+          out.push([s, i * CHUNK]);
+          s = null;
+        }
+      }
+      return out;
+    }
+
+    /* ---------------- Lecture des blocs traités ---------------- */
+
+    lastIndex() { return this.nChunks - 1; }
 
     async bufferFor(i) {
       const cached = this.buffers.get(i);
       if (cached) return cached;
-
       let pcm = this.mem.get(i);
-      let sampleRate = this.sampleRate;
-      let channels = this.channels;
       if (!pcm && this.cacheEnabled) {
         const rec = await VocalisIDB.get(`${this.videoId}:${i}`).catch(() => null);
-        if (rec) {
-          pcm = rec.pcm;
-          sampleRate = rec.sampleRate;
-          channels = rec.channels;
-          this.mem.set(i, pcm);
-        }
+        if (rec) { pcm = rec.pcm; this.mem.set(i, pcm); }
       }
       if (!pcm) return null;
-
-      const len = Math.floor(pcm.length / channels);
-      const buf = this.ctx.createBuffer(channels, len, sampleRate);
-      for (let c = 0; c < channels; c++) {
-        const out = buf.getChannelData(c);
-        for (let s = 0; s < len; s++) out[s] = pcm[s * channels + c] / 32768;
+      const len = Math.floor(pcm.length / 2);
+      const buf = this.ctx.createBuffer(2, len, SR);
+      const L = buf.getChannelData(0), R = buf.getChannelData(1);
+      for (let s = 0; s < len; s++) {
+        L[s] = pcm[s * 2] / 32768;
+        R[s] = pcm[s * 2 + 1] / 32768;
       }
       this.buffers.set(i, buf);
       this.trimMemory();
@@ -253,7 +369,7 @@ self.VocalisEngine = (() => {
 
     trimMemory() {
       if (this.mem.size <= MEM_WINDOW) return;
-      const center = Math.floor((this.video.currentTime || 0) / SEG);
+      const center = Math.floor((this.video.currentTime || 0) / CHUNK);
       const keys = [...this.mem.keys()].sort(
         (a, b) => Math.abs(a - center) - Math.abs(b - center)
       );
@@ -277,16 +393,17 @@ self.VocalisEngine = (() => {
       if (!this.active || !this.ctx || this.video.paused || this.video.ended) return;
 
       const t0 = this.video.currentTime;
-      const i0 = Math.max(0, Math.floor(t0 / SEG));
-      const iMax = Math.min(this.lastIndex(), Math.floor((t0 + SCHEDULE_AHEAD) / SEG));
+      const i0 = Math.max(0, Math.floor(t0 / CHUNK));
+      const iMax = Math.min(this.lastIndex(), Math.floor((t0 + SCHEDULE_AHEAD) / CHUNK));
       const ctx0 = this.ctx.currentTime + 0.08;
       this.base = { ctx0, vid0: t0 };
 
       for (let i = i0; i <= iMax; i++) {
+        if (!this.processed.has(i)) continue; // zone pas prête : trou assumé + stall géré
         const buf = await this.bufferFor(i);
         if (g !== this.gen || !this.active || this.video.paused) return;
-        if (!buf) continue; // segment pas encore prêt : trou (v0.2 : rare)
-        const segStart = i * SEG;
+        if (!buf) continue;
+        const segStart = i * CHUNK;
         const offset = Math.max(0, t0 - segStart);
         const when = ctx0 + Math.max(0, segStart - t0);
         const src = this.ctx.createBufferSource();
@@ -301,7 +418,12 @@ self.VocalisEngine = (() => {
       if (!this.active) return;
       switch (ev.type) {
         case "play":
+          this.stalled = false;
+          this.setPriority(Math.floor(this.video.currentTime / CHUNK));
+          if (this.video.playbackRate === 1) this.reschedule();
+          break;
         case "seeked":
+          this.setPriority(Math.floor(this.video.currentTime / CHUNK));
           if (this.video.playbackRate === 1 && !this.stalled) this.reschedule();
           break;
         case "playing":
@@ -313,23 +435,17 @@ self.VocalisEngine = (() => {
           this.stopSources();
           break;
         case "waiting":
-          // La vidéo bufferise : on coupe le son remplacé, il repartira
-          // tout seul sur « playing ».
           this.stalled = true;
           this.stopSources();
           break;
         case "ratechange":
           if (this.video.playbackRate !== 1) {
-            // Pas de time-stretch en v0.2 : on rend le son original
-            // (surtout pas un écran muet pendant la vitesse ×2).
             this.stopSources();
             this.video.muted = false;
             if (!this.rateNoticeShown) {
               this.rateNoticeShown = true;
               this.hooks.onNotice &&
-                this.hooks.onNotice(
-                  "Vitesse ≠ ×1 : son original rétabli (pas encore de time-stretch en v0.2)."
-                );
+                this.hooks.onNotice("Vitesse ≠ ×1 : son original rétabli (pas de time-stretch en v0.3).");
             }
           } else {
             this.video.muted = true;
@@ -345,8 +461,7 @@ self.VocalisEngine = (() => {
     async activate() {
       if (!this.started || this.active) return;
       if (this.video.playbackRate !== 1) {
-        this.hooks.onNotice &&
-          this.hooks.onNotice("Vitesse ≠ ×1 : son original (v0.2).");
+        this.hooks.onNotice && this.hooks.onNotice("Vitesse ≠ ×1 : son original (v0.3).");
         return;
       }
 
@@ -364,7 +479,19 @@ self.VocalisEngine = (() => {
 
       this.watchdog = setInterval(() => {
         if (!this.active || this.video.paused || this.stalled) return;
-        if (this.video.playbackRate !== 1) return; // géré par ratechange
+        if (this.video.playbackRate !== 1) return;
+
+        /* Zone non traitée sous la tête de lecture → écran « traitement » */
+        const cur = Math.floor(this.video.currentTime / CHUNK);
+        if (!this.processed.has(cur)) {
+          this.stopSources();
+          this.setPriority(cur);
+          this.hooks.onStall &&
+            this.hooks.onStall(Math.round((this.processed.size / this.nChunks) * 100));
+          return;
+        }
+        this.hooks.onStallClear && this.hooks.onStallClear();
+
         if (!this.base) { this.reschedule(); return; }
         const expected = this.base.vid0 + (this.ctx.currentTime - this.base.ctx0);
         if (Math.abs(this.video.currentTime - expected) > DRIFT_MAX) this.reschedule();
@@ -394,22 +521,24 @@ self.VocalisEngine = (() => {
       this.gain = null;
     }
 
-    /* ---------------------------------------------------------- */
-
     status() {
       return {
         started: this.started,
         active: this.active,
         videoId: this.videoId,
         duration: this.duration,
+        processedPct: this.nChunks ? Math.round((this.processed.size / this.nChunks) * 100) : 0,
       };
     }
 
     destroy() {
       this.aborted = true;
       this.deactivate();
+      if (this.worker) this.worker.terminate();
+      this.worker = null;
       this.mem.clear();
       this.buffers.clear();
+      this.processed.clear();
     }
   }
 

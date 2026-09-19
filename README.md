@@ -7,12 +7,11 @@ n'aiment pas la musique inutile) : elle retire la musique de fond des vidéos
 YouTube pour ne garder que les voix et les sons utiles — directement sur ton
 PC, sans envoyer tes données nulle part.
 
-> ⚠️ **Statut : v0.2 — pipeline audio en place.**
-> L'extension remplace déjà le son de la vidéo par sa version re-synchronisée
-> (cache, seek instantané, barre « son traité », overlay de chargement) —
-> mais joue pour l'instant le son **original**. Le modèle qui retire la
-> musique s'insère en v0.3 sans rien changer au reste
-> (voir la [feuille de route](docs/ROADMAP.md)).
+> ✅ **Statut : v0.3 — la musique disparaît vraiment.**
+> Le modèle HTDemucs (ONNX, WebGPU/WASM) tourne **sur ton PC** et ne garde
+> que les voix. Pré-chargement de ~60 s puis traitement en arrière-plan,
+> cache pour le retour arrière, barre « son traité », overlay de chargement.
+> Voir la [feuille de route](docs/ROADMAP.md) pour la suite.
 
 ---
 
@@ -62,7 +61,8 @@ Double-clique sur :
 
 Le fichier interroge GitHub, récupère la dernière version et met à jour tous
 les fichiers du dossier automatiquement. Il suffit ensuite de cliquer sur
-**Actualiser** dans `chrome://extensions`.
+**Actualiser** dans `chrome://extensions`. Le `.bat` est 100 % autonome
+(curl/tar/robocopy fournis par Windows) : aucun git, aucune commande à coller.
 
 > 📌 Par convention : chaque étape validée du projet est publiée en
 > **Release GitHub**. Le fichier de mise à jour pointe toujours sur la
@@ -89,7 +89,7 @@ et le choix du modèle dans [`docs/MODELES.md`](docs/MODELES.md).
 
 ```
 vocalis/
-├── METTRE_A_JOUR.bat        # Mise à jour locale en 1 clic (Windows)
+├── METTRE_A_JOUR.bat        # Mise à jour locale en 1 clic (Windows, autonome)
 ├── mettre_a_jour.sh         # Mise à jour locale (macOS / Linux)
 ├── README.md
 ├── CHANGELOG.md
@@ -100,11 +100,11 @@ vocalis/
 ├── extension/               # ← LE dossier à charger dans Chrome
 │   ├── manifest.json        # Manifeste MV3
 │   ├── background/          # Service worker
-│   ├── content/             # Injecté sur les pages YouTube (UI + pipeline)
+│   ├── content/             # Injecté sur YouTube : UI, pipeline, worker IA
 │   ├── popup/               # Fenêtre du bouton dans la barre Chrome
-│   └── icons/               # Icônes de l'extension
+│   ├── icons/               # Icônes de l'extension
+│   └── lib/                 # onnxruntime-web + demucs-web (MIT), embarqués
 └── scripts/
-    ├── update.ps1           # Logique de mise à jour (appelé par le .bat)
     ├── package_release.sh   # Prépare le zip d'une release GitHub
     └── make_icons.py        # Régénère les icônes si besoin
 ```

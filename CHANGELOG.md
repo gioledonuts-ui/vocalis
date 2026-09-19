@@ -4,6 +4,24 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.3.0] — 2026-09-19
+
+### Ajouté
+- **La musique disparaît vraiment** : HTDemucs en ONNX (demucs-web, MIT) dans
+  un worker, WebGPU en priorité, repli WASM.
+- Modèle (~172 Mo) téléchargé **une seule fois** depuis Hugging Face puis mis
+  en cache IndexedDB — jamais dans git, jamais envoyé ailleurs.
+- Blocs de 30 s séparés (voix uniquement), pré-chargement ~60 s puis
+  traitement en arrière-plan pendant la lecture.
+- Écran « traitement de cette zone… » si on avance dans une zone pas encore
+  séparée (file prioritaire sur la tête de lecture).
+- onnxruntime-web 1.30 embarqué dans `extension/lib/` (~41 Mo).
+
+### Limites connues
+- Décodage complet en mémoire avant traitement (vidéos > 2 h gourmandes).
+- Vitesse ≠ ×1 → son original ; directs non gérés.
+- Premier lancement : téléchargement du modèle selon ton débit.
+
 ## [0.2.0] — 2026-09-19
 
 ### Ajouté

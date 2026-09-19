@@ -29,15 +29,18 @@ de séparation) :
 > pas de time-stretch (vitesse ≠ 1 → son original), directs non gérés.
 > La v0.3 remplace l'étape « identité » par le modèle, segment par segment.
 
-## ⏳ v0.3 — La musique disparaît vraiment
-- [ ] Téléchargement du modèle ONNX au premier lancement (asset de release).
-- [ ] ONNX Runtime Web : WebGPU d'abord, repli WASM.
-- [ ] Sortie « voix uniquement » (ou « musique uniquement » inversée) avec
-      recouvrement + fondu entre segments.
-- [ ] Benchmark sur machine réelle (×temps réel selon GPU/CPU) et réglage de
-      la fenêtre de pré-chargement en conséquence.
-- [ ] Qualité audio validée : pas de voix métallique, pas d'artefacts aux
-      jointures.
+## ✅ v0.3 — La musique disparaît vraiment
+- [x] onnxruntime-web 1.30 embarqué (WebGPU + WASM), worker dédié.
+- [x] Modèle HTDemucs ONNX (demucs-web, MIT) téléchargé au premier lancement
+      depuis Hugging Face, mis en cache IndexedDB.
+- [x] Séparation par blocs de 30 s, voix uniquement, PCM16 en cache.
+- [x] Pré-chargement ~60 s puis traitement en arrière-plan pendant la lecture.
+- [x] Seek vers zone non traitée : écran « traitement… » + file prioritaire.
+- [x] Barre « son traité » = plages réellement séparées.
+
+> Limites assumées : décodage complet en mémoire avant traitement (optimisation
+> segment par segment prévue plus tard), vitesse ≠ ×1 → son original, directs
+> non gérés. Challenger BS-RoFormer à benchmarker en v0.4.
 
 ## ⏳ v0.4 — Réglages et robustesse
 - [ ] Options : secondes de pré-chargement, qualité du modèle, plafonds cache.

@@ -16,7 +16,10 @@ const PHASES = {
   response: "Lecture du lecteur YouTube…",
   download: "Téléchargement de l'audio",
   decode: "Analyse de l'audio…",
-  prepare: "Préparation du son",
+  resample: "Mise au format 44,1 kHz…",
+  model: "Modèle IA (HTDemucs)",
+  prepare: "Séparation voix / musique (pré-chargement)",
+  stall: "Traitement de la zone en cours…",
 };
 
 function isYouTubeUrl(url = "") {
@@ -78,8 +81,10 @@ async function refresh() {
 
   if (st.notice) statusEl.textContent = st.notice;
   else if (st.active)
-    statusEl.textContent = "Son remplacé et synchronisé. Retour arrière = instantané (cache).";
-  else if (st.started) statusEl.textContent = "Son prêt — lecture en cours de bascule…";
+    statusEl.textContent =
+      `Musique retirée, son synchronisé.` +
+      (st.processedPct != null ? ` (${st.processedPct} % de la vidéo traité.)` : "");
+  else if (st.started) statusEl.textContent = "Voix prêtes — bascule de la lecture…";
   else statusEl.textContent = "Pipeline en cours…";
 
   if (!st.active && st.phase) {
