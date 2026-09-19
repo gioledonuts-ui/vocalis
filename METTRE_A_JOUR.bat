@@ -27,6 +27,8 @@ exit /b %errorlevel%
 
 :MAIN
 set "TARGET=%~1"
+rem Enleve le \ final sinon "%TARGET%" mange la fin de la commande git
+if "%TARGET:~-1%"=="\" set "TARGET=%TARGET:~0,-1%"
 set "BRANCHE=arena/01a0b9bb-vocalis"
 
 echo.

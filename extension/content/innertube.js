@@ -11,18 +11,34 @@
 self.VocalisInnertube = (() => {
   "use strict";
 
+  /* Clients alignés sur l'état de l'art 2026 (yt-dlp) : android_vr et
+     android « sdkless » ne demandent ni PO-token ni déchiffrement JS et
+     renvoient des URLs en clair ; les autres sont des filets de sécurité. */
   const CLIENTS = [
     {
-      clientName: "TVHTML5",
-      clientVersion: "7.20250120.19.00",
-      userAgent:
-        "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version YouTubeTV/7.20250120.19.00",
+      clientName: "ANDROID_VR",
+      clientVersion: "1.61",
+      androidSdkVersion: 32,
+      userAgent: "com.google.android.youtube.tvvr/1.61 (Linux; U; Android 12L) gzip",
     },
     {
       clientName: "ANDROID",
+      clientVersion: "20.10.38",
+      // pas d'androidSdkVersion volontairement (« sdkless »)
+      userAgent: "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip",
+    },
+    {
+      clientName: "IOS",
       clientVersion: "19.09.37",
-      androidSdkVersion: 33,
-      userAgent: "com.google.android.youtube/19.09.37 (Linux; U; Android 13) gzip",
+      deviceModel: "iPhone14,3",
+      userAgent:
+        "com.google.ios.youtube/19.09.37 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)",
+    },
+    {
+      clientName: "TVHTML5",
+      clientVersion: "7.20250630.19.00",
+      userAgent:
+        "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version YouTubeTV/7.20250630.19.00",
     },
   ];
 
@@ -43,6 +59,7 @@ self.VocalisInnertube = (() => {
           userAgent: c.userAgent,
         };
         if (c.androidSdkVersion) client.androidSdkVersion = c.androidSdkVersion;
+        if (c.deviceModel) client.deviceModel = c.deviceModel;
 
         const resp = await fetch(
           "https://www.youtube.com/youtubei/v1/player?key=" +
@@ -73,14 +90,15 @@ self.VocalisInnertube = (() => {
               (j?.playabilityStatus?.status || "réponse vide") + ")");
           continue;
         }
-        const formats = (j?.streamingData?.adaptiveFormats || []).filter(
-          (f) => f.url && (f.mimeType || "").startsWith("audio/")
-        );
+        const all = j?.streamingData?.adaptiveFormats || [];
+        const audioAll = all.filter((f) => (f.mimeType || "").startsWith("audio/"));
+        const formats = audioAll.filter((f) => f.url);
         if (formats.length) {
           log("innertube " + c.clientName + " : OK, " + formats.length + " formats audio");
           return { formats, client: c.clientName };
         }
-        log("innertube " + c.clientName + " : aucun format audio avec URL");
+        log("innertube " + c.clientName + " : " + audioAll.length +
+            " formats audio mais aucun avec URL (DRM/SABR/chiffré)");
       } catch (e) {
         log("innertube " + c.clientName + " : échec (" + (e?.message || e) + ")");
       }

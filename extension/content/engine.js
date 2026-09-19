@@ -152,37 +152,49 @@ self.VocalisEngine = (() => {
 
       const jsUrl = this.extras?.playerJsUrl;
       if (jsUrl) {
-        log("déchiffrement : récupération du lecteur base.js…");
-        try {
-          const resp = await withTimeout(
-            fetch(jsUrl, { signal: AbortSignal.timeout(10000) }), 10000, "base.js (réponse)"
-          );
-          const baseJs = await withTimeout(resp.text(), 15000, "base.js (lecture)");
-          log("base.js chargé (" + Math.round(baseJs.length / 1024) + " Ko)");
-          const cands = pageAudio
-            .filter((f) => f.signatureCipher)
-            .sort((a, b) => (b.bitrate || b.averageBitrate || 0) - (a.bitrate || a.averageBitrate || 0));
-          for (const f of cands) {
-            const solved = VocalisCipher.solve(baseJs, f.signatureCipher);
-            if (solved) {
-              const withSolved = { ...f, url: solved.url };
-              out.via = "déchiffrement";
-              if ((f.mimeType || "").startsWith("audio/mp4") && !out.m4a) out.m4a = withSolved;
-              out.best = out.best || withSolved;
-              if (out.best) {
-                log("déchiffrement : URL audio reconstituée");
-                return out;
-              }
-            }
-          }
-          log("déchiffrement : aucun format résolu");
-        } catch (e) {
-          log("déchiffrement : échec (" + (e?.message || e) + ")");
+        // base.js principal, puis variante ES5 (syntaxe classique que notre
+        // mini-bundler comprend à coup sûr) si le premier ne résout rien.
+        const variants = [jsUrl];
+        const es5 = jsUrl.replace("/player_ias.vflset/", "/player_ias_es5.vflset/");
+        if (es5 !== jsUrl) variants.push(es5);
+        for (const v of variants) {
+          const solved = await this.tryDecipher(v, pageAudio, out, log);
+          if (solved) return solved;
         }
       } else {
         log("base.js introuvable dans la page → déchiffrement impossible");
       }
       return out;
+    }
+
+    async tryDecipher(jsUrl, pageAudio, out, log) {
+      const label = jsUrl.includes("_es5.") ? "base.js es5" : "base.js";
+      log("déchiffrement : récupération de " + label + "…");
+      try {
+        const resp = await withTimeout(
+          fetch(jsUrl, { signal: AbortSignal.timeout(10000) }), 10000, label + " (réponse)"
+        );
+        const baseJs = await withTimeout(resp.text(), 15000, label + " (lecture)");
+        log(label + " chargé (" + Math.round(baseJs.length / 1024) + " Ko)");
+        const cands = pageAudio
+          .filter((f) => f.signatureCipher)
+          .sort((a, b) => (b.bitrate || b.averageBitrate || 0) - (a.bitrate || a.averageBitrate || 0));
+        for (const f of cands) {
+          const solved = VocalisCipher.solve(baseJs, f.signatureCipher);
+          if (solved) {
+            const withSolved = { ...f, url: solved.url };
+            out.via = "déchiffrement";
+            if ((f.mimeType || "").startsWith("audio/mp4") && !out.m4a) out.m4a = withSolved;
+            out.best = out.best || withSolved;
+            log("déchiffrement : URL audio reconstituée (" + label + ")");
+            return out;
+          }
+        }
+        log("déchiffrement : aucun format résolu avec " + label);
+      } catch (e) {
+        log("déchiffrement : échec " + label + " (" + (e?.message || e) + ")");
+      }
+      return null;
     }
 
     /* ---------------------------------------------------------- */

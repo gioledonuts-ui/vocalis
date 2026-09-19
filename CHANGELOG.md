@@ -4,6 +4,20 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.4.6] — 2026-09-19
+
+### Corrigé
+- CRITIQUE : innertube.js et cipher.js n'étaient pas listés dans le
+  manifest → « VocalisInnertube is not defined » et déchiffrement mort.
+  Les deux scripts sont maintenant chargés.
+- Innertube : clients alignés sur l'état de l'art 2026 (ANDROID_VR,
+  ANDROID « sdkless », IOS, TV) — pas de PO-token, URLs en clair.
+- Déchiffrement : balayage des fonctions signature (forme a.split /
+  a.join) indépendant des sites d'appel + variante ES5 de base.js en
+  repli si le lecteur principal ne résout rien.
+- METTRE_A_JOUR.bat : le « \ » final du chemin avalait la fin de la
+  commande git (« cannot change to … ») → corrigé.
+
 ## [0.4.5] — 2026-09-19
 
 ### Corrigé

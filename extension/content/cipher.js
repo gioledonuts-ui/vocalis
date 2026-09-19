@@ -119,6 +119,35 @@ self.VocalisCipher = (() => {
     }
   }
 
+  /**
+   * Filet de sécurité 2026 : si les motifs de sites d'appel ne trouvent
+   * rien, on balaie toutes les fonctions « X=function(a){…a.split("")…
+   * a.join("")…} » du lecteur — la forme de la fonction signature depuis
+   * dix ans, quel que soit son nom ou l'endroit où elle est appelée.
+   */
+  function findSigCandidates(src) {
+    const out = [];
+    const res = [
+      /(?:^|[^$\w])([$\w]{1,12})\s*=\s*function\s*\(\s*a\s*\)\s*\{/g,
+      /(?:^|[^$\w])function\s+([$\w]{1,12})\s*\(\s*a\s*\)\s*\{/g,
+    ];
+    for (const re of res) {
+      let m;
+      while ((m = re.exec(src)) && out.length < 8) {
+        const name = m[1];
+        if (out.includes(name)) continue;
+        const bOpen = src.indexOf("{", re.lastIndex - 1);
+        const body = extractBraces(src, bOpen);
+        if (!body) continue;
+        // corps typique : a=a.split(""); … O.meth(a,n) … ; return a.join("")
+        if (body.indexOf('.split("")') === -1 || body.indexOf('.join("")') === -1) continue;
+        if (!/[$\w]+\.[\w$]+\(\s*a\s*,/.test(body)) continue;
+        out.push(name);
+      }
+    }
+    return out;
+  }
+
   function findSigFnName(src) {
     const patterns = [
       /(?:^|[^$\w])([$\w]+)\s*=\s*function\(\s*a\s*\)\s*{\s*a\s*=\s*a\.split\(\s*""\s*\)/,
@@ -159,10 +188,31 @@ self.VocalisCipher = (() => {
       const sp = sc.get("sp") || "signature";
       if (!baseUrl || !s) return null;
 
-      const sigName = findSigFnName(baseJs);
-      const sigFn = sigName && bundle(baseJs, sigName);
-      if (typeof sigFn !== "function") return null;
-      const sig = sigFn(s);
+      // Motifs de sites d'appel d'abord, puis balayage des candidats ;
+      // chaque candidat est validé par sa sortie (longueur + alphabet).
+      const names = [];
+      const pat = findSigFnName(baseJs);
+      if (pat) names.push(pat);
+      for (const c of findSigCandidates(baseJs)) if (!names.includes(c)) names.push(c);
+      let sig = null;
+      for (const nm of names) {
+        const fn = bundle(baseJs, nm);
+        if (typeof fn !== "function") continue;
+        try {
+          const out = fn(s);
+          if (
+            typeof out === "string" &&
+            out.length >= 40 &&
+            out.length <= 200 &&
+            /^[A-Za-z0-9._-]+$/.test(out)
+          ) {
+            sig = out;
+            break;
+          }
+        } catch {
+          /* candidat suivant */
+        }
+      }
       if (!sig) return null;
 
       const u = new URL(baseUrl);
