@@ -45,25 +45,32 @@ de se charger en arrière-plan.
 
 ## Installation (première fois)
 
-1. Télécharge ce dossier (bouton **Code → Download ZIP** sur GitHub, ou une
-   release) et décompresse-le où tu veux sur ton PC. Garde le dossier tel quel.
+Le dépôt est **privé** : pas de ZIP anonyme, on clone une seule fois avec
+ton compte GitHub.
+
+1. Dans un terminal :
+   ```bash
+   git clone https://github.com/gioledonuts-ui/vocalis.git
+   ```
 2. Ouvre Chrome puis `chrome://extensions`.
 3. Active le **Mode développeur** (en haut à droite).
 4. Clique sur **Charger l'extension non empaquetée** et sélectionne le
-   sous-dossier `extension/` de ce projet.
+   sous-dossier `extension/` du clone.
 5. Épingle Vocalis dans la barre d'extensions (icône puzzle → 📌).
+6. (Recommandé) Double-clique sur **`TELECHARGER_MODELE.bat`** : il pose le
+   modèle IA (~172 Mo, source publique Hugging Face) dans
+   `extension/models/`. Sans ça, l'extension le télécharge elle-même au
+   premier usage — mais avec le fichier local, c'est instantané et ça ne
+   dépend d'aucun réseau.
 
 ## Mise à jour (sans rien réinstaller)
 
-Double-clique sur :
+Double-clique sur **`METTRE_A_JOUR.bat`** (Windows). Le dépôt étant privé,
+le fichier utilise **ton git** (celui qui push déjà) : `fetch` + `reset` sur
+la branche de travail. Aucune commande à coller, aucun ZIP.
 
-- **Windows** : `METTRE_A_JOUR.bat`
-- **macOS / Linux** : `mettre_a_jour.sh` (dans un terminal : `./mettre_a_jour.sh`)
-
-Le fichier interroge GitHub, récupère la dernière version et met à jour tous
-les fichiers du dossier automatiquement. Il suffit ensuite de cliquer sur
-**Actualiser** dans `chrome://extensions`. Le `.bat` est 100 % autonome
-(curl/tar/robocopy fournis par Windows) : aucun git, aucune commande à coller.
+> ⚠️ Le dossier du modèle (`extension/models/`) n'est pas suivi par git :
+> les mises à jour ne le touchent jamais.
 
 > 📌 Par convention : chaque étape validée du projet est publiée en
 > **Release GitHub**. Le fichier de mise à jour pointe toujours sur la
@@ -90,8 +97,9 @@ et le choix du modèle dans [`docs/MODELES.md`](docs/MODELES.md).
 
 ```
 vocalis/
-├── METTRE_A_JOUR.bat        # Mise à jour locale en 1 clic (Windows, autonome)
-├── mettre_a_jour.sh         # Mise à jour locale (macOS / Linux)
+├── METTRE_A_JOUR.bat        # Mise à jour locale en 1 clic (via ton git, dépôt privé)
+├── TELECHARGER_MODELE.bat   # Pose le modèle IA une fois dans extension/models/
+├── mettre_a_jour.sh         # Mise à jour locale (macOS / Linux, via git)
 ├── README.md
 ├── CHANGELOG.md
 ├── docs/

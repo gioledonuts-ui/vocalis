@@ -1,72 +1,37 @@
 #!/usr/bin/env bash
 # ============================================================
-#  VOCALIS - Mise à jour locale depuis GitHub (macOS / Linux)
+#  VOCALIS - Mise à jour locale (macOS / Linux)
+#  Le dépôt est PRIVÉ : la mise à jour passe par ton git.
 #  Usage : ./mettre_a_jour.sh
 # ============================================================
 set -euo pipefail
 
-REPO="gioledonuts-ui/vocalis"
+BRANCHE="arena/01a0b9bb-vocalis"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_DIR="${1:-$SCRIPT_DIR}"
 
 echo ""
-echo "  VOCALIS - mise à jour depuis GitHub"
-echo "  Dossier cible : $TARGET_DIR"
+echo "  VOCALIS - mise à jour"
+echo "  Dossier : $TARGET_DIR"
 echo ""
 
-command -v curl >/dev/null || { echo "  [ERREUR] curl est requis."; exit 1; }
-if ! command -v unzip >/dev/null; then
-  echo "  [ERREUR] unzip est requis (ex: sudo apt install unzip)."
+if [ ! -d "$TARGET_DIR/.git" ]; then
+  echo "  Ce dossier n'est pas un clone git."
+  echo "  Le dépôt étant privé, fais un clone unique :"
+  echo ""
+  echo "    git clone https://github.com/gioledonuts-ui/vocalis.git"
+  echo ""
   exit 1
 fi
 
-# 1) Dernière release, sinon branche main
-ZIP_URL=""
-VERSION=""
-if RELEASE_JSON=$(curl -fsSL -H "User-Agent: vocalis-updater" "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null); then
-  ZIP_URL=$(printf '%s' "$RELEASE_JSON" | grep -o '"browser_download_url": *"[^"]*\.zip"' | head -n1 | cut -d'"' -f4 || true)
-  if [ -z "$ZIP_URL" ]; then
-    ZIP_URL=$(printf '%s' "$RELEASE_JSON" | grep -o '"zipball_url": *"[^"]*"' | head -n1 | cut -d'"' -f4 || true)
-  fi
-  VERSION=$(printf '%s' "$RELEASE_JSON" | grep -o '"tag_name": *"[^"]*"' | head -n1 | cut -d'"' -f4 || true)
-fi
-if [ -z "$ZIP_URL" ]; then
-  echo "  Aucune release trouvée, bascule sur la branche main..."
-  ZIP_URL="https://codeload.github.com/$REPO/zip/refs/heads/main"
-  VERSION="main"
-fi
+command -v git >/dev/null || { echo "  [ERREUR] git introuvable."; exit 1; }
 
-echo "  Version détectée : ${VERSION:-inconnue}"
-echo "  Téléchargement..."
-
-TMP="$(mktemp -d /tmp/vocalis.XXXXXX)"
-trap 'rm -rf "$TMP"' EXIT
-curl -fSL -H "User-Agent: vocalis-updater" -o "$TMP/vocalis.zip" "$ZIP_URL"
-
-# 2) Extraire et trouver la racine du projet
-echo "  Extraction..."
-unzip -q "$TMP/vocalis.zip" -d "$TMP"
-ROOT="$TMP"
-if [ ! -f "$ROOT/extension/manifest.json" ]; then
-  # Le zip GitHub contient un dossier préfixe (ex: vocalis-v0.1.0/) :
-  # on cherche le manifest.json (profondeur 2 ou 3) et on remonte à la racine.
-  ROOT="$(find "$TMP" -mindepth 2 -maxdepth 3 -type f -name manifest.json -path '*extension*' 2>/dev/null \
-        | head -n1 | xargs -r dirname | xargs -r dirname || true)"
-fi
-if [ -z "${ROOT:-}" ] || [ ! -f "$ROOT/extension/manifest.json" ]; then
-  echo "  [ERREUR] extension/manifest.json introuvable dans l'archive."
-  exit 1
-fi
-
-# 3) Synchroniser (sans toucher à .git si le dossier est un clone)
+echo "  Récupération de la dernière version (via ton git)..."
+git -C "$TARGET_DIR" fetch --quiet origin "$BRANCHE"
 echo "  Mise à jour des fichiers..."
-rsync -a --delete --exclude '.git' "$ROOT/" "$TARGET_DIR/" 2>/dev/null || {
-  # Repli sans rsync
-  find "$TARGET_DIR" -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
-  cp -R "$ROOT/." "$TARGET_DIR/"
-}
+git -C "$TARGET_DIR" reset --hard FETCH_HEAD
 
 echo ""
-echo "  ✔ Mise à jour terminée (${VERSION:-?})."
+echo "  ✔ Mise à jour terminée."
 echo "  Ouvre chrome://extensions et clique sur « Actualiser » pour Vocalis."
 echo ""

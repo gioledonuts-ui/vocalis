@@ -4,6 +4,23 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.4.2] — 2026-09-19
+
+### Corrigé (cause racine de TOUS les échecs du .bat depuis le début)
+- Le dépôt GitHub est **PRIVÉ** : les téléchargements anonymes (API releases,
+  codeload) renvoient 404 sans auth. Mon environnement de dev passait par un
+  proxy authentifié, ce qui masquait le problème dans mes tests.
+- `METTRE_A_JOUR.bat` utilise désormais **ton git** (fetch + reset sur la
+  branche de travail) : fiable, authentifié, une touche.
+- Si le dossier n'est pas un clone : message clair avec LA commande de clone
+  à faire une fois.
+
+### Ajouté
+- **`TELECHARGER_MODELE.bat`** : télécharge le modèle IA (~172 Mo, Hugging
+  Face public) dans `extension/models/`. Le worker lit ce fichier local en
+  priorité (zéro réseau), puis le cache IndexedDB, puis Hugging Face.
+- `extension/models/` ignoré par git et jamais touché par les mises à jour.
+
 ## [0.4.1] — 2026-09-19
 
 ### Corrigé

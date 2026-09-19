@@ -95,13 +95,30 @@ let initStarted = false;
 
 async function ensureReady() {
   if (processor) return;
-  let buf = await getCachedModel();
-  if (!buf) {
+
+  /* 1 — fichier local fourni avec l'extension (TELECHARGER_MODELE.bat) :
+        aucun réseau, aucun temps d'attente. */
+  let buf = null;
+  let fromLocal = false;
+  try {
+    const local = await fetch(new URL("../models/htdemucs_embedded.onnx", import.meta.url).href);
+    if (local.ok && (local.headers.get("content-length") === null ||
+        parseInt(local.headers.get("content-length"), 10) > 1_000_000)) {
+      buf = await local.arrayBuffer();
+      fromLocal = true;
+    }
+  } catch { /* pas de fichier local */ }
+
+  /* 2 — cache navigateur (IndexedDB) */
+  if (!buf) buf = await getCachedModel();
+  if (buf) {
+    post({ type: "model-download", pct: 100, cached: true, local: fromLocal });
+  } else {
+    /* 3 — téléchargement Hugging Face (une seule fois) */
     buf = await downloadModel();
     await putCachedModel(buf).catch(() => {});
-  } else {
-    post({ type: "model-download", pct: 100, cached: true });
   }
+
   processor = new DemucsProcessor({ ort });
   try {
     await processor.loadModel(buf);
