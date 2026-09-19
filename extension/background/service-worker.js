@@ -34,6 +34,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return;
   }
 
+  // Bouton « Annuler » de l'overlay : désactive proprement l'onglet
+  // (storage + badge), le content script faisant le reste en local.
+  if (msg.type === "vocalis:disable-tab" && sender.tab?.id != null) {
+    const tabId = sender.tab.id;
+    chrome.storage.local.get({ enabledTabs: {} }).then(({ enabledTabs }) => {
+      if (enabledTabs[tabId] !== undefined) {
+        delete enabledTabs[tabId];
+        chrome.storage.local.set({ enabledTabs });
+      }
+    });
+    chrome.action.setBadgeText({ tabId, text: "" });
+    return;
+  }
+
   // Le popup informe le worker de l'état d'un onglet (badge uniquement ici).
   if (msg.type === "vocalis:tab-state" && typeof msg.tabId === "number") {
     chrome.action.setBadgeText({ tabId: msg.tabId, text: msg.on ? "ON" : "" });

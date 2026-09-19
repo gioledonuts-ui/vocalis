@@ -4,6 +4,24 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.4.1] — 2026-09-19
+
+### Corrigé
+- **Pause + silence immédiats** au clic sur Vocalis : plus de son original
+  qui tourne pendant le chargement ; la lecture reprend toute seule dès que
+  les voix sont prêtes (et reste en pause si tu l'avais mise en pause).
+- **Overlay non bloquant** : les contrôles YouTube restent cliquables autour
+  de la carte, et un bouton « Annuler — garder le son original » est visible
+  pendant TOUTES les phases (pas seulement en erreur).
+
+### Accéléré
+- Blocs de 10 s (au lieu de 30) et pré-chargement 10 s : la lecture sans
+  musique démarre beaucoup plus vite.
+- Le modèle IA se charge **en parallèle** du flux audio (au lieu d'attendre
+  l'un puis l'autre).
+- Bascule legacy signalée dans le popup (« mode legacy »), pour savoir
+  précisément quel chemin tourne chez toi.
+
 ## [0.4.0] — 2026-09-19
 
 ### Ajouté

@@ -83,6 +83,7 @@ async function refresh() {
   else if (st.active) {
     const bits = [];
     if (st.processedPct != null) bits.push(st.processedPct + " % traité");
+    if (st.mode) bits.push("mode " + st.mode);
     if (st.via) bits.push("flux via " + st.via);
     statusEl.textContent =
       "Musique retirée, son synchronisé." + (bits.length ? " (" + bits.join(", ") + ")" : "");

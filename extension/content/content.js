@@ -29,7 +29,13 @@
   /* Overlay                                                             */
   /* ------------------------------------------------------------------ */
 
-  function showOverlay({ title, subtitle, pct = null, error = false, closable = false }) {
+  function cancelVocalis() {
+    // Désactivation complète (storage + badge compris) depuis l'overlay.
+    chrome.runtime.sendMessage({ type: "vocalis:disable-tab" }).catch(() => {});
+    setEnabled(false);
+  }
+
+  function showOverlay({ title, subtitle, pct = null, error = false }) {
     let overlay = document.getElementById("vocalis-overlay");
     if (!overlay) {
       overlay = document.createElement("div");
@@ -42,17 +48,19 @@
           <h2 class="vocalis-title"></h2>
           <p class="vocalis-subtitle"></p>
           <div class="vocalis-progress"><div class="vocalis-progress-fill"></div></div>
+          <button class="vocalis-close" type="button">Annuler — garder le son original</button>
           <p class="vocalis-note"></p>
-          <button class="vocalis-close" type="button">Fermer et garder le son original</button>
         </div>`;
       (document.querySelector(".html5-video-player") || document.body).appendChild(overlay);
-      overlay.querySelector(".vocalis-close").addEventListener("click", hideOverlay);
+      overlay.querySelector(".vocalis-close").addEventListener("click", cancelVocalis);
     }
 
     overlay.querySelector(".vocalis-card").classList.toggle("error", error);
     overlay.querySelector(".vocalis-title").textContent = title;
     overlay.querySelector(".vocalis-subtitle").textContent = subtitle || "";
-    overlay.querySelector(".vocalis-close").style.display = closable ? "" : "none";
+    overlay.querySelector(".vocalis-close").textContent = error
+      ? "Fermer et garder le son original"
+      : "Annuler — garder le son original";
     overlay.querySelector(".vocalis-note").textContent = error
       ? "La vidéo reste lisible avec son son d'origine."
       : "Vocalis — tout se traite sur ton PC, rien ne part en ligne.";
@@ -153,7 +161,11 @@
             title: info?.cached
               ? "Chargement du modèle IA depuis ton PC…"
               : "Téléchargement du modèle IA (une seule fois, ~172 Mo)…",
-            subtitle: info?.cached ? "" : `${pct ?? 0} % — ensuite tout reste sur ton PC`,
+            subtitle: info?.cached
+              ? ""
+              : info?.received
+                ? `${pct ?? 0} % — ${MB(info.received)} / ${MB(info.total)} (en parallèle de l'audio)`
+                : `${pct ?? 0} % — ensuite tout reste sur ton PC`,
             pct: info?.cached ? null : pct,
           });
         } else if (name === "prepare") {
@@ -193,8 +205,11 @@
       onReady: (duration) => {
         state.currentVideoId = engine.videoId;
         hideOverlay();
-        updateBufferBar([[0, duration]], duration);
-        if (state.enabled) engine.activate();
+        updateBufferBar(engine.ranges(), duration);
+        if (state.enabled) {
+          engine.activate();
+          if (state.pausedByUs) getVideoElement()?.play().catch(() => {});
+        }
       },
     });
 
@@ -205,19 +220,34 @@
   function setEnabled(enabled) {
     state.enabled = enabled;
     chrome.runtime.sendMessage({ type: "vocalis:badge", on: enabled }).catch(() => {});
+    const video = getVideoElement();
 
     if (!enabled) {
-      // On garde le cache (re-activation instantanée) ; il sera purgé
+      // On garde le cache (réactivation instantanée) ; il sera purgé
       // quand on quittera la vidéo.
       state.engine?.deactivate();
       hideOverlay();
       hideBufferBar();
+      if (video) {
+        video.muted = false;
+        if (state.pausedByUs && video.paused) video.play().catch(() => {});
+      }
+      state.pausedByUs = false;
       return;
     }
 
+    // SILENCE + PAUSE immédiats : plus de son original qui tourne pendant le
+    // chargement, et l'utilisateur garde la main (overlay non bloquant).
+    if (video) {
+      state.pausedByUs = !video.paused;
+      video.pause();
+      video.muted = true;
+    }
+
     if (state.engine?.started) {
-      updateBufferBar([[0, state.engine.duration]], state.engine.duration);
+      updateBufferBar(state.engine.ranges(), state.engine.duration);
       state.engine.activate();
+      if (state.pausedByUs && video) video.play().catch(() => {});
     } else if (!state.engine || !state.engine.running) {
       // Jamais lancé, ou précédent essai en erreur : on (re)part.
       startPipeline();
@@ -243,6 +273,7 @@
         videoId: state.currentVideoId,
         processedPct: state.engine?.status().processedPct ?? null,
         via: state.engine?.status().via ?? null,
+        mode: state.engine?.status().mode ?? null,
       });
     }
   });

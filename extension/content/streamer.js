@@ -24,7 +24,7 @@ self.VocalisStreamer = (() => {
   "use strict";
 
   const RANGE = 4 * 1024 * 1024;      // taille d'une tranche téléchargée
-  const SEG = 30;                     // durée d'un segment émis (s)
+  const SEG = 10;                     // durée d'un segment émis (s)
   const SR = 44100;                   // fréquence native de l'itag 140
   const LOOKAHEAD_S = 90;             // avance max de téléchargement sur le traitement
   class Streamer {

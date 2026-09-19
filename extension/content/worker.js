@@ -29,7 +29,7 @@ ort.env.logLevel = "error";
 const MODEL_URL =
   "https://huggingface.co/timcsy/demucs-web-onnx/resolve/main/htdemucs_embedded.onnx";
 const MODEL_ID = "htdemucs_embedded_v1";
-const SEG_S = 30;
+const SEG_S = 10;
 
 const post = (msg, transfer = []) => self.postMessage(msg, transfer);
 
@@ -91,6 +91,7 @@ async function downloadModel() {
 
 let processor = null;
 let doneCount = 0;
+let initStarted = false;
 
 async function ensureReady() {
   if (processor) return;
@@ -169,6 +170,12 @@ self.onmessage = async (e) => {
       await ensureReady();
       post({ type: "ready" });
       pumpSeg();
+    } else if (msg.type === "stream" && !processor && !initStarted) {
+      initStarted = true;
+      ensureReady().then(() => { post({ type: "ready" }); pumpSeg(); }).catch((e) => {
+        post({ type: "error", message: String((e && e.message) || e) });
+      });
+      startStream(msg.url, msg.fromTime || 0, msg.skip);
     } else if (msg.type === "stream") {
       startStream(msg.url, msg.fromTime || 0, msg.skip);
     } else if (msg.type === "stream-restart") {

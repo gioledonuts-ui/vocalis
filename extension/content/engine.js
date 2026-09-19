@@ -21,9 +21,9 @@
 self.VocalisEngine = (() => {
   "use strict";
 
-  const CHUNK = 30;                 // durée d'un bloc traité (s)
+  const CHUNK = 10;                 // durée d'un bloc traité (s)
   const SR = 44100;                 // fréquence du modèle / de l'itag 140
-  const PRELOAD_S = 30;             // secondes de voix prêtes avant lecture
+  const PRELOAD_S = 10;             // secondes de voix prêtes avant lecture
   const SCHEDULE_AHEAD = 90;        // secondes d'audio programmées d'avance
   const MEM_WINDOW = 60;            // blocs gardés en RAM (~30 min)
   const CACHE_CAP = 1_500_000_000;  // plafond IndexedDB par vidéo (~1,5 Go)
@@ -182,10 +182,9 @@ self.VocalisEngine = (() => {
       }
       this.videoId = pr.videoDetails.videoId;
 
-      /* Worker IA (commun) */
+      /* Worker IA : créé maintenant, initialisé EN PARALLÈLE du flux */
       this.phase("model");
-      await this.initWorker().catch(() => {});
-      if (this.aborted || this.fatal) return;
+      this.spawnWorker();
 
       const incrOk =
         src.m4a && typeof AudioDecoder !== "undefined" && typeof MP4Box !== "undefined";
@@ -196,7 +195,7 @@ self.VocalisEngine = (() => {
         this.phase("download", 0);
         this._startStream(0);
         await new Promise((res) => { this.startResolve = res; });
-        if (this.aborted) return;
+        if (this.aborted || this.fatal) return;
       }
       if (this.mode === "legacy-pending" || (!incrOk && src.best)) {
         this.mode = "legacy";
@@ -223,6 +222,8 @@ self.VocalisEngine = (() => {
       if (this.started || this.mode !== "incr") return;
       this.mode = "legacy-pending";
       this.worker.postMessage({ type: "stream-stop" });
+      this.hooks.onNotice &&
+        this.hooks.onNotice("Flux fragmenté indisponible ici → bascule en téléchargement complet.");
       const r = this.startResolve;
       this.startResolve = null;
       r && r(); // start() enchaînera sur startLegacy
@@ -302,34 +303,33 @@ self.VocalisEngine = (() => {
     /* Worker IA + file de traitement                              */
     /* ---------------------------------------------------------- */
 
-    initWorker() {
-      return new Promise((resolve, reject) => {
-        const w = new Worker(chrome.runtime.getURL("content/worker.js"), { type: "module" });
-        this.worker = w;
-        w.onmessage = (e) => this.onWorkerMessage(e.data, resolve);
-        w.onerror = (e) => {
-          this.fatal = true;
-          this.hooks.onError &&
-            this.hooks.onError("Échec du moteur IA : " + (e.message || "worker"));
-          reject(e);
-        };
-        w.postMessage({ type: "init" });
-      });
+    spawnWorker() {
+      const w = new Worker(chrome.runtime.getURL("content/worker.js"), { type: "module" });
+      this.worker = w;
+      w.onmessage = (e) => this.onWorkerMessage(e.data);
+      w.onerror = (e) => {
+        this.fatal = true;
+        this.hooks.onError &&
+          this.hooks.onError("Échec du moteur IA : " + (e.message || "worker"));
+        const r = this.startResolve;
+        this.startResolve = null;
+        r && r();
+      };
+      w.postMessage({ type: "init" });
     }
 
-    onWorkerMessage(msg, initResolve) {
+    onWorkerMessage(msg) {
       if (this.aborted) return;
       if (msg.type === "model-download") {
         this.phase("model", msg.pct, msg);
+      } else if (msg.type === "ready") {
+        this.workerReady = true;
+        this.pump();
       } else if (msg.type === "stream-download") {
         this.downloadedSec = msg.seconds || 0;
         this.phase("download", msg.pct, { seconds: msg.seconds });
       } else if (msg.type === "stream-error") {
         this._fallback();
-      } else if (msg.type === "ready") {
-        this.workerReady = true;
-        initResolve && initResolve();
-        this.pump();
       } else if (msg.type === "done") {
         if (this.processed.has(msg.index)) { this.pump(); return; }
         this.onChunkDone(msg.index, new Float32Array(msg.left), new Float32Array(msg.right));
@@ -337,7 +337,9 @@ self.VocalisEngine = (() => {
         if (!this.workerReady) {
           this.fatal = true;
           this.hooks.onError && this.hooks.onError("Échec du modèle IA : " + msg.message);
-          initResolve && initResolve();
+          const r = this.startResolve;
+          this.startResolve = null;
+          r && r();
           return;
         }
         this.currentProcessing = null;
