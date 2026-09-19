@@ -134,7 +134,7 @@ Avantages :
 | Risque | Réponse prévue |
 |---|---|
 | YouTube change la structure de `ytInitialPlayerResponse` | Versionner l'extraction, détecter les échecs et message clair |
-| Traitement plus lent que la lecture (petite config CPU) | Mode dégradé : pré-chargement plus long, avertissement, option serveur plus tard |
+| Traitement plus lent que la lecture (config sans GPU) | Mode dégradé : pré-chargement plus long + avertissement. Pas de mode serveur (décision : 100 % local) |
 | URLs audio signées/expirantes | Re-téléchargement à la demande du flux si nécessaire |
 | Poids du modèle | Téléchargement unique + asset de release, jamais dans git |
 | Écart audio/image après seek | Re-sync systématique sur `video.currentTime` |

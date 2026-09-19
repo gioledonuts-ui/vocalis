@@ -122,10 +122,11 @@ Détail : [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Confidentialité
 
-Objectif non négociable : **tout le traitement se fait sur ton PC**. Aucun
-audio n'est envoyé sur un serveur par Vocalis. Si un mode serveur devait
-exister un jour (pour les petites configs), il sera explicitement optionnel
-et désactivé par défaut.
+Objectif non négociable (décision prise) : **tout le traitement se fait sur
+ton PC, aucun mode serveur, jamais**. Aucun audio ne quitte ta machine. Le
+système est calibré pour un PC de stream Windows avec GPU récent
+(RTX 30xx/40xx) via WebGPU ; sur une config sans GPU, mode dégradé
+(pré-chargement plus long) — mais rien ne part en ligne.
 
 ## Signaler un problème
 

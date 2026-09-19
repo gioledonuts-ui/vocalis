@@ -42,10 +42,11 @@ de séparation) :
 
 ## 💭 v0.5 — Mode « live » (exploration)
 - [ ] Traitement au fil de l'eau, latence 1–3 s, sans clic préalable.
-- [ ] Uniquement si les mesures de perf le permettent (WebGPU).
+- [ ] Uniquement si les mesures de perf le permettent (WebGPU) — a priori
+      très jouable sur la machine cible (RTX 30xx/40xx).
 
 ## Hors périmètre (décidé)
-- ❌ Envoyer l'audio sur un serveur par défaut (confidentialité).
+- ❌ Envoyer l'audio sur un serveur, même en option : 100 % local, point final.
 - ❌ Stocker les modèles IA dans git.
 - ❌ Créer des pull requests pour livrer le code : le travail arrive sur
   `main` via des merges locaux / fast-forward (règle de la session).

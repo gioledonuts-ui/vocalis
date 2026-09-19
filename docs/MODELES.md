@@ -39,6 +39,14 @@
 > retenu (les poids communautaires ne se valent pas tous) et la présence
 > d'un export ONNX stable.
 
+## Machine cible (décidé)
+
+PC de stream **Windows 11** avec **GPU récent (RTX 30xx/40xx)** → l'axe
+principal est **WebGPU**, où htdemucs tourne plusieurs fois plus vite que le
+temps réel : le mode « pré-chargement puis arrière-plan » sera confortable et
+le mode « live » (v0.5) est très plausible. Le repli WASM (sans GPU) reste
+prévu mais n'est pas le cas nominal.
+
 ## Implications concrètes
 
 - Le modèle est téléchargé **une seule fois** au premier usage (asset de
