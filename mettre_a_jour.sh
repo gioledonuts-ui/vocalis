@@ -48,7 +48,10 @@ echo "  Extraction..."
 unzip -q "$TMP/vocalis.zip" -d "$TMP"
 ROOT="$TMP"
 if [ ! -f "$ROOT/extension/manifest.json" ]; then
-  ROOT="$(find "$TMP" -mindepth 1 -maxdepth 2 -name manifest.json -path '*/extension/*' | head -n1 | xargs dirname | xargs dirname || true)"
+  # Le zip GitHub contient un dossier préfixe (ex: vocalis-v0.1.0/) :
+  # on cherche le manifest.json (profondeur 2 ou 3) et on remonte à la racine.
+  ROOT="$(find "$TMP" -mindepth 2 -maxdepth 3 -type f -name manifest.json -path '*extension*' 2>/dev/null \
+        | head -n1 | xargs -r dirname | xargs -r dirname || true)"
 fi
 if [ -z "${ROOT:-}" ] || [ ! -f "$ROOT/extension/manifest.json" ]; then
   echo "  [ERREUR] extension/manifest.json introuvable dans l'archive."
