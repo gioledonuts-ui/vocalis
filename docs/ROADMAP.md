@@ -42,16 +42,20 @@ de séparation) :
 > segment par segment prévue plus tard), vitesse ≠ ×1 → son original, directs
 > non gérés. Challenger BS-RoFormer à benchmarker en v0.4.
 
-## ⏳ v0.4 — Réglages et robustesse
-- [ ] Options : secondes de pré-chargement, qualité du modèle, plafonds cache.
-- [ ] Statistiques dans le popup (avance du traitement, vitesse).
-- [ ] Gestion des cas tordus : vidéos très longues, lives, changement
-      automatique de vidéo, onglets multiples.
+## ✅ v0.4 — Chargement fragmenté + updater fiabilisé
+- [x] Pipeline incrémental : tranches 4 Mo, mp4box.js + WebCodecs, segments
+      30 s traités dès leur arrivée ; lecture après ~30 s de voix prêtes.
+- [x] Téléchargement borné (~90 s d'avance) : ne ralentit plus la vidéo.
+- [x] Seek lointain : reprise du flux à l'endroit voulu (pas de re-téléchargement).
+- [x] `METTRE_A_JOUR.bat` réécrit sans `for /f` (il se fermait aussitôt).
+- [x] Chemin « legacy » (téléchargement complet) conservé en filet de sécurité.
 
-## 💭 v0.5 — Mode « live » (exploration)
-- [ ] Traitement au fil de l'eau, latence 1–3 s, sans clic préalable.
-- [ ] Uniquement si les mesures de perf le permettent (WebGPU) — a priori
-      très jouable sur la machine cible (RTX 30xx/40xx).
+## 💭 v0.5 — Réglages + mode « live »
+- [ ] Options : secondes de pré-chargement, plafonds cache, modèle challenger
+      (BS-RoFormer ONNX) en option qualité max.
+- [ ] Statistiques dans le popup (avance du traitement, backend WebGPU/WASM).
+- [ ] Mode « live » latence 1–3 s, si les perfs le permettent (WebGPU).
+- [ ] Cas tordus : lives, changement auto de vidéo, onglets multiples.
 
 ## Hors périmètre (décidé)
 - ❌ Envoyer l'audio sur un serveur, même en option : 100 % local, point final.

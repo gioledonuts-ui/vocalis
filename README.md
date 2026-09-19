@@ -7,11 +7,12 @@ n'aiment pas la musique inutile) : elle retire la musique de fond des vidéos
 YouTube pour ne garder que les voix et les sons utiles — directement sur ton
 PC, sans envoyer tes données nulle part.
 
-> ✅ **Statut : v0.3 — la musique disparaît vraiment.**
+> ✅ **Statut : v0.4 — la musique disparaît, sans attendre.**
 > Le modèle HTDemucs (ONNX, WebGPU/WASM) tourne **sur ton PC** et ne garde
-> que les voix. Pré-chargement de ~60 s puis traitement en arrière-plan,
-> cache pour le retour arrière, barre « son traité », overlay de chargement.
-> Voir la [feuille de route](docs/ROADMAP.md) pour la suite.
+> que les voix. Chargement **fragmenté** : la lecture démarre après ~30 s de
+> voix prêtes, le reste se traite pendant que tu regardes ; retours arrière
+> instantanés (cache), barre « son traité », téléchargement borné pour ne pas
+> ralentir la vidéo. Voir la [feuille de route](docs/ROADMAP.md).
 
 ---
 
@@ -114,10 +115,10 @@ vocalis/
 | Version | Contenu | Statut |
 |---|---|---|
 | v0.1 | Structure, manifeste, popup, interface de base, mise à jour auto, docs | ✅ |
-| v0.2 | Pipeline audio complet **sans** modèle (lecture de l'audio original via notre tuyauterie) + overlay + barre de cache | ⏳ |
-| v0.3 | Modèle IA de séparation (ONNX, WebGPU/WASM) : la musique disparaît vraiment | ⏳ |
-| v0.4 | Réglages (qualité, pré-chargement, choix du modèle), robustesse | ⏳ |
-| v0.5 | Mode « live » quasi temps réel, si les perfs le permettent | 💭 |
+| v0.2 | Pipeline audio complet **sans** modèle (lecture de l'audio original via notre tuyauterie) + overlay + barre de cache | ✅ |
+| v0.3 | Modèle IA de séparation (ONNX, WebGPU/WASM) + verrous YouTube (innertube, déchiffrement) | ✅ |
+| v0.4 | Chargement fragmenté 30 s par 30 s, téléchargement borné, updater fiabilisé | ✅ |
+| v0.5 | Réglages (pré-chargement, modèle challenger RoFormer), mode « live » | 💭 |
 
 Détail : [`docs/ROADMAP.md`](docs/ROADMAP.md).
 

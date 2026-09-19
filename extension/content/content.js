@@ -55,7 +55,7 @@
     overlay.querySelector(".vocalis-close").style.display = closable ? "" : "none";
     overlay.querySelector(".vocalis-note").textContent = error
       ? "La vidéo reste lisible avec son son d'origine."
-      : "Vocalis v0.2 — pipeline audio validé, modèle de séparation en v0.3.";
+      : "Vocalis — tout se traite sur ton PC, rien ne part en ligne.";
 
     const fill = overlay.querySelector(".vocalis-progress-fill");
     if (pct == null) {
@@ -135,10 +135,12 @@
           showOverlay({ title: "Lecture du lecteur YouTube…", pct: null });
         } else if (name === "download") {
           showOverlay({
-            title: "Téléchargement de l'audio…",
+            title: "Réception de l'audio…",
             subtitle:
               pct != null
-                ? `${pct} %` + (info ? ` — ${MB(info.received)} / ${MB(info.total)}` : "")
+                ? info?.seconds != null
+                  ? `${pct} % — ${Math.round(info.seconds)} s de vidéo reçues, la lecture démarre vite`
+                  : `${pct} %` + (info?.received ? ` — ${MB(info.received)} / ${MB(info.total)}` : "")
                 : "Connexion au flux audio…",
             pct,
           });

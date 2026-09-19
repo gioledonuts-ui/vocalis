@@ -4,6 +4,28 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.4.0] — 2026-09-19
+
+### Ajouté
+- **Chargement fragmenté** (demande du streamer) : le flux audio m4a est
+  téléchargé par tranches de 4 Mo, démultiplexé (mp4box.js) et décodé
+  (WebCodecs) au fil de l'eau. La lecture démarre après ~30 s de voix
+  prêtes ; le reste se traite pendant qu'on regarde. Si on rattrape le
+  traitement, l'écran « traitement… » revient le temps du bloc.
+- **Téléchargement borné** (~90 s d'avance sur le traitement) : fini le
+  téléchargement géant qui ralentissait le chargement de la vidéo YouTube.
+- Seek loin devant : le flux redémarre à cet endroit au lieu de tout
+  re-télécharger ; le cache rend les retours arrière instantanés.
+
+### Corrigé
+- `METTRE_A_JOUR.bat` se fermait aussitôt ouvert : une parenthèse PowerShell
+  dans un `for /f` cassait l'analyse cmd. Réécrit sans `for /f` (PowerShell
+  écrit dans des fichiers temporaires). Plus aucun scénario de fenêtre qui
+  claque sans message.
+- Texte périmé « v0.2 » dans l'overlay ; sous-titres de progression clarifiés.
+- Mémoire : le chemin incrémental ne décode plus jamais la vidéo entière
+  (le chemin complet reste en filet de sécurité « legacy »).
+
 ## [0.3.1] — 2026-09-19
 
 ### Corrigé

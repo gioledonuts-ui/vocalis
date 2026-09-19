@@ -1,29 +1,30 @@
 /**
- * Vocalis — moteur audio v0.3 : la musique disparaît vraiment
+ * Vocalis — moteur audio v0.4
  *
- * Pipeline :
- *  1. playerResponse (pont main-world) → meilleur flux audio ;
- *  2. téléchargement (progression) + décodage ;
- *  3. remise à 44,1 kHz stéréo (le format du modèle) ;
- *  4. worker IA (HTDemucs ONNX, WebGPU/WASM) : chaque bloc de 30 s est
- *     séparé, on ne garde que les VOIX ;
- *  5. pré-chargement : la lecture démarre dès ~60 s de voix prêtes, le
- *     reste se traite en arrière-plan pendant qu'on regarde ;
- *  6. cache IndexedDB (blocs de 30 s, PCM16) : retour arrière instantané,
- *     purge en quittant la vidéo ;
- *  7. relecture Web Audio synchronisée sur video.currentTime.
+ * Deux chemins pour obtenir les voix, sans musique :
  *
- * Si on avance dans une zone pas encore traitée : écran « traitement »
- * jusqu'à ce que la zone soit prête (file prioritaire sur la tête de lecture).
+ *  A) INCRÉMENTAL (par défaut, flux m4a/AAC) : téléchargement par tranches
+ *     de 4 Mo, démultiplexage mp4box.js, décodage WebCodecs au fil de l'eau,
+ *     segments de 30 s envoyés au worker IA dès qu'ils existent. La lecture
+ *     démarre après ~30 s de voix prêtes ; le reste suit en arrière-plan ;
+ *     le téléchargement est borné pour ne pas ralentir la vidéo YouTube.
+ *
+ *  B) LEGACY (filet de sécurité) : téléchargement + décodage complet puis
+ *     traitement, comme en v0.3. Utilisé si WebCodecs/mp4box/AAC manquent.
+ *
+ * Commun aux deux chemins : worker IA (HTDemucs ONNX WebGPU/WASM), cache
+ * IndexedDB (retour arrière instantané, purge en quittant la vidéo),
+ * relecture Web Audio synchronisée sur video.currentTime, barre
+ * « son traité », écrans de chargement/traitement.
  */
 
 self.VocalisEngine = (() => {
   "use strict";
 
   const CHUNK = 30;                 // durée d'un bloc traité (s)
-  const SR = 44100;                 // fréquence du modèle
-  const PRELOAD_S = 60;             // secondes de voix prêtes avant lecture
-  const SCHEDULE_AHEAD = 60;        // secondes d'audio programmées d'avance
+  const SR = 44100;                 // fréquence du modèle / de l'itag 140
+  const PRELOAD_S = 30;             // secondes de voix prêtes avant lecture
+  const SCHEDULE_AHEAD = 90;        // secondes d'audio programmées d'avance
   const MEM_WINDOW = 60;            // blocs gardés en RAM (~30 min)
   const CACHE_CAP = 1_500_000_000;  // plafond IndexedDB par vidéo (~1,5 Go)
   const DRIFT_MAX = 0.09;           // écart audio/vidéo toléré (s)
@@ -38,22 +39,27 @@ self.VocalisEngine = (() => {
       this.started = false;
       this.active = false;
       this.stalled = false;
+      this.fatal = false;
       this.rateNoticeShown = false;
+      this.mode = null;             // "incr" | "legacy"
 
       this.videoId = null;
       this.duration = 0;
       this.nChunks = 0;
+      this.via = null;
 
-      this.audio44 = null;          // { left, right } Float32 masters
-      this.mem = new Map();         // index -> Int16Array (voix, PCM16 entrelacé)
+      this.audio44 = null;          // masters (legacy uniquement)
+      this.mem = new Map();         // index -> Int16Array (voix PCM16)
       this.buffers = new Map();     // index -> AudioBuffer
       this.processed = new Set();
 
       this.worker = null;
       this.workerReady = false;
       this.workerBusy = false;
-      this.queue = [];
-      this.pending = new Map();     // index -> resolve()
+      this.procQueue = [];
+
+      this.downloadedSec = 0;       // secondes de flux reçues (incrémental)
+      this.streamStarted = false;
 
       this.ctx = null;
       this.gain = null;
@@ -87,10 +93,14 @@ self.VocalisEngine = (() => {
       });
     }
 
-    pickFormat(pr) {
+    /* ---------------------------------------------------------- */
+    /* Obtention du flux (3 couches, voir v0.3.1)                  */
+    /* ---------------------------------------------------------- */
+
+    pickAudio(pr, mimePrefix) {
       const formats = pr?.streamingData?.adaptiveFormats || [];
       const audio = formats.filter(
-        (f) => f.url && (f.mimeType || "").startsWith("audio/")
+        (f) => f.url && (f.mimeType || "").startsWith(mimePrefix)
       );
       if (!audio.length) return null;
       audio.sort(
@@ -99,25 +109,19 @@ self.VocalisEngine = (() => {
       return audio[0];
     }
 
-    /**
-     * Cascade d'obtention d'une URL audio utilisable :
-     *  1. URLs en clair du playerResponse de la page ;
-     *  2. requête youtubei/v1/player avec des clients TV/Android
-     *     (reçoivent souvent des URLs en clair) ;
-     *  3. déchiffrement signatureCipher + paramètre n depuis base.js.
-     */
     async resolveAudioSource(pr) {
-      const direct = this.pickFormat(pr);
-      if (direct) return { fmt: direct, via: "page" };
+      const out = { m4a: this.pickAudio(pr, "audio/mp4"), best: this.pickAudio(pr, "audio/"), via: "page" };
+      if (out.best) return out;
 
-      const apiKey =
-        this.extras?.apiKey || "AIzaSyAO_FJ2SlqU8Q4STEHLNlTpqUcavnZbsC8";
+      const apiKey = this.extras?.apiKey || "AIzaSyAO_FJ2SlqU8Q4STEHLNlTpqUcavnZbsC8";
       const it = await VocalisInnertube.query(pr.videoDetails.videoId, apiKey);
       if (it) {
-        const formats = it.formats.sort(
-          (a, b) => (b.bitrate || b.averageBitrate || 0) - (a.bitrate || a.averageBitrate || 0)
-        );
-        return { fmt: formats[0], via: it.client };
+        const f = (list) =>
+          list.sort((a, b) => (b.bitrate || b.averageBitrate || 0) - (a.bitrate || a.averageBitrate || 0))[0];
+        out.m4a = f(it.formats.filter((x) => (x.mimeType || "").startsWith("audio/mp4"))) || null;
+        out.best = f(it.formats);
+        out.via = it.client;
+        if (out.best) return out;
       }
 
       const jsUrl = this.extras?.playerJsUrl;
@@ -125,26 +129,25 @@ self.VocalisEngine = (() => {
         try {
           const baseJs = await (await fetch(jsUrl)).text();
           const cands = (pr?.streamingData?.adaptiveFormats || [])
-            .filter(
-              (f) => f.signatureCipher && (f.mimeType || "").startsWith("audio/")
-            )
-            .sort(
-              (a, b) => (b.bitrate || b.averageBitrate || 0) - (a.bitrate || a.averageBitrate || 0)
-            );
+            .filter((f) => f.signatureCipher && (f.mimeType || "").startsWith("audio/"))
+            .sort((a, b) => (b.bitrate || b.averageBitrate || 0) - (a.bitrate || a.averageBitrate || 0));
           for (const f of cands) {
             const solved = VocalisCipher.solve(baseJs, f.signatureCipher);
-            if (solved) return { fmt: { ...f, url: solved.url }, via: "déchiffrement" };
+            if (solved) {
+              const withUrl = { ...f, url: solved.url };
+              out.via = "déchiffrement";
+              if ((f.mimeType || "").startsWith("audio/mp4") && !out.m4a) out.m4a = withUrl;
+              out.best = out.best || withUrl;
+              if (out.best) return out;
+            }
           }
-        } catch {
-          /* déchiffrement indisponible */
-        }
+        } catch { /* déchiffrement indisponible */ }
       }
-
-      return { fmt: null };
+      return out;
     }
 
     /* ---------------------------------------------------------- */
-    /* Pipeline                                                    */
+    /* Démarrage                                                   */
     /* ---------------------------------------------------------- */
 
     async start() {
@@ -160,11 +163,16 @@ self.VocalisEngine = (() => {
         return;
       }
       if (pr.videoDetails.isLive) {
-        this.hooks.onError && this.hooks.onError("Les directs ne sont pas encore gérés (v0.3).");
+        this.hooks.onError && this.hooks.onError("Les directs ne sont pas encore gérés.");
         return;
       }
-      const { fmt, via } = await this.resolveAudioSource(pr);
-      if (!fmt) {
+      this.duration = parseFloat(pr.videoDetails.lengthSeconds) || 0;
+      this.nChunks = Math.max(1, Math.ceil(this.duration / CHUNK));
+      this.cacheEnabled = this.nChunks * CHUNK * SR * 2 * 2 <= CACHE_CAP;
+
+      const src = await this.resolveAudioSource(pr);
+      this.via = src.via;
+      if (!src.best) {
         this.hooks.onError &&
           this.hooks.onError(
             "Aucun flux audio utilisable (couches testées : page, innertube, déchiffrement). " +
@@ -172,10 +180,58 @@ self.VocalisEngine = (() => {
           );
         return;
       }
-      this.via = via;
       this.videoId = pr.videoDetails.videoId;
 
-      /* Téléchargement */
+      /* Worker IA (commun) */
+      this.phase("model");
+      await this.initWorker().catch(() => {});
+      if (this.aborted || this.fatal) return;
+
+      const incrOk =
+        src.m4a && typeof AudioDecoder !== "undefined" && typeof MP4Box !== "undefined";
+
+      if (incrOk) {
+        this.mode = "incr";
+        this.incrFmt = src.m4a;
+        this.phase("download", 0);
+        this._startStream(0);
+        await new Promise((res) => { this.startResolve = res; });
+        if (this.aborted) return;
+      }
+      if (this.mode === "legacy-pending" || (!incrOk && src.best)) {
+        this.mode = "legacy";
+        await this.startLegacy(src.best);
+        if (this.aborted) return;
+      }
+
+      if (this.started) this.hooks.onReady && this.hooks.onReady(this.duration);
+    }
+
+    /* ---------------- Chemin incrémental ---------------- */
+
+    _startStream(fromTime) {
+      this.worker.postMessage({
+        type: this.streamStarted ? "stream-restart" : "stream",
+        url: this.incrFmt.url,
+        fromTime,
+        skip: [...this.processed],
+      });
+      this.streamStarted = true;
+    }
+
+    _fallback() {
+      if (this.started || this.mode !== "incr") return;
+      this.mode = "legacy-pending";
+      this.worker.postMessage({ type: "stream-stop" });
+      const r = this.startResolve;
+      this.startResolve = null;
+      r && r(); // start() enchaînera sur startLegacy
+    }
+
+    /* ---------------- Chemin legacy (v0.3) ---------------- */
+
+    async startLegacy(fmt) {
+      this.mode = "legacy";
       this.phase("download", 0);
       let arrayBuf;
       try {
@@ -200,7 +256,6 @@ self.VocalisEngine = (() => {
       }
       if (this.aborted) return;
 
-      /* Décodage */
       this.phase("decode");
       let decoded;
       const probe = new AudioContext();
@@ -213,56 +268,39 @@ self.VocalisEngine = (() => {
         probe.close();
       }
       if (this.aborted) return;
-      this.duration = decoded.duration;
-      this.nChunks = Math.max(1, Math.ceil(this.duration / CHUNK));
-      this.cacheEnabled = this.nChunks * CHUNK * SR * 2 * 2 <= CACHE_CAP;
+      if (!this.duration) {
+        this.duration = decoded.duration;
+        this.nChunks = Math.max(1, Math.ceil(this.duration / CHUNK));
+      }
 
-      /* 44,1 kHz stéréo */
       this.phase("resample");
       let left, right;
       if (decoded.sampleRate === SR && decoded.numberOfChannels >= 2) {
         left = decoded.getChannelData(0);
         right = decoded.getChannelData(1);
-      } else if (decoded.numberOfChannels === 1) {
-        const off = new OfflineAudioContext(2, Math.ceil(decoded.duration * SR), SR);
-        const src = off.createBufferSource();
-        src.buffer = decoded;
-        src.connect(off.destination);
-        src.start();
-        const rendered = await off.startRendering();
-        left = rendered.getChannelData(0);
-        right = left;
-        decoded = null;
       } else {
         const off = new OfflineAudioContext(2, Math.ceil(decoded.duration * SR), SR);
-        const src = off.createBufferSource();
-        src.buffer = decoded;
-        src.connect(off.destination);
-        src.start();
+        const s = off.createBufferSource();
+        s.buffer = decoded;
+        s.connect(off.destination);
+        s.start();
         const rendered = await off.startRendering();
         left = rendered.getChannelData(0);
-        right = rendered.getChannelData(1);
+        right = rendered.numberOfChannels > 1 ? rendered.getChannelData(1) : left;
         decoded = null;
       }
       if (this.aborted) return;
       this.audio44 = { left, right };
 
-      /* Worker IA */
-      this.phase("model");
-      await this.initWorker().catch(() => {});
-      if (this.aborted || this.fatal) return;
-
-      /* Pré-chargement : traiter jusqu'à PRELOAD_S puis lancer la lecture */
       this.phase("prepare", 0);
-      await new Promise((resolve) => {
-        this.preloadResolve = resolve;
-        this.setPriority(0);
-      });
-      if (this.aborted) return;
-
-      this.started = true;
-      this.hooks.onReady && this.hooks.onReady(this.duration);
+      const readyP = new Promise((res) => { this.startResolve = res; });
+      this.setPriority(0);
+      await readyP;
     }
+
+    /* ---------------------------------------------------------- */
+    /* Worker IA + file de traitement                              */
+    /* ---------------------------------------------------------- */
 
     initWorker() {
       return new Promise((resolve, reject) => {
@@ -283,52 +321,55 @@ self.VocalisEngine = (() => {
       if (this.aborted) return;
       if (msg.type === "model-download") {
         this.phase("model", msg.pct, msg);
+      } else if (msg.type === "stream-download") {
+        this.downloadedSec = msg.seconds || 0;
+        this.phase("download", msg.pct, { seconds: msg.seconds });
+      } else if (msg.type === "stream-error") {
+        this._fallback();
       } else if (msg.type === "ready") {
         this.workerReady = true;
         initResolve && initResolve();
+        this.pump();
       } else if (msg.type === "done") {
+        if (this.processed.has(msg.index)) { this.pump(); return; }
         this.onChunkDone(msg.index, new Float32Array(msg.left), new Float32Array(msg.right));
-        } else if (msg.type === "error") {
+      } else if (msg.type === "error") {
         if (!this.workerReady) {
-          this.hooks.onError && this.hooks.onError("Échec du modèle IA : " + msg.message);
-          initResolve && initResolve(); // débloque start(), qui verra started=false
           this.fatal = true;
+          this.hooks.onError && this.hooks.onError("Échec du modèle IA : " + msg.message);
+          initResolve && initResolve();
           return;
         }
-        // Échec sur un bloc : on le saute (trou de son ponctuel).
-        const idx = this.currentProcessing;
-        this.pending.delete(idx);
         this.currentProcessing = null;
         this.workerBusy = false;
         this.pump();
       }
     }
 
-    /* ---------------- File de traitement ---------------- */
-
     setPriority(fromIdx) {
       const wanted = [];
       for (let i = fromIdx; i < this.nChunks; i++) {
-        if (!this.processed.has(i) && !this.pending.has(i) && i !== this.currentProcessing) {
-          wanted.push(i);
-        }
+        if (!this.processed.has(i) && i !== this.currentProcessing) wanted.push(i);
       }
-      this.queue = wanted;
-      this.pump();
+      this.procQueue = wanted;
+      if (this.mode === "legacy") this.pump();
     }
 
     pump() {
-      if (this.workerBusy || !this.workerReady || !this.queue.length) return;
-      const idx = this.queue.shift();
-      if (this.processed.has(idx)) { this.pump(); return; }
-      this.workerBusy = true;
-      this.currentProcessing = idx;
-
+      if (this.mode !== "legacy" || this.workerBusy || !this.workerReady) return;
+      let idx = null;
+      while (this.procQueue.length) {
+        const i = this.procQueue.shift();
+        if (!this.processed.has(i) && this.audio44) { idx = i; break; }
+      }
+      if (idx == null) return;
       const start = idx * CHUNK * SR;
       const len = Math.min(CHUNK * SR, this.audio44.left.length - start);
+      if (len <= 0) { this.pump(); return; }
+      this.workerBusy = true;
+      this.currentProcessing = idx;
       const left = new Float32Array(this.audio44.left.subarray(start, start + len));
       const right = new Float32Array(this.audio44.right.subarray(start, start + len));
-      this.pending.set(idx, true);
       this.worker.postMessage(
         { type: "process", index: idx, left: left.buffer, right: right.buffer },
         [left.buffer, right.buffer]
@@ -336,11 +377,9 @@ self.VocalisEngine = (() => {
     }
 
     onChunkDone(idx, left, right) {
-      this.pending.delete(idx);
       this.currentProcessing = null;
       this.workerBusy = false;
 
-      /* PCM16 entrelacé */
       const pcm = new Int16Array(left.length * 2);
       for (let s = 0; s < left.length; s++) {
         const l = left[s], r = right[s];
@@ -362,20 +401,18 @@ self.VocalisEngine = (() => {
 
       this.hooks.onProcessed && this.hooks.onProcessed(this.ranges(), this.duration);
 
-      /* Pré-chargement atteint ? */
-      if (this.preloadResolve) {
+      if (!this.started) {
         const ready = this.processed.size * CHUNK;
         this.phase("prepare", Math.min(100, Math.round((ready / PRELOAD_S) * 100)));
         if (ready >= PRELOAD_S || this.processed.size >= this.nChunks) {
-          const r = this.preloadResolve;
-          this.preloadResolve = null;
-          r();
+          this.started = true;
+          const r = this.startResolve;
+          this.startResolve = null;
+          r && r();
         }
       }
 
-      /* Tout est traité : libère les masters */
       if (this.processed.size >= this.nChunks) this.audio44 = null;
-
       this.pump();
     }
 
@@ -393,9 +430,9 @@ self.VocalisEngine = (() => {
       return out;
     }
 
-    /* ---------------- Lecture des blocs traités ---------------- */
-
-    lastIndex() { return this.nChunks - 1; }
+    /* ---------------------------------------------------------- */
+    /* Relecture synchronisée                                      */
+    /* ---------------------------------------------------------- */
 
     async bufferFor(i) {
       const cached = this.buffers.get(i);
@@ -445,12 +482,12 @@ self.VocalisEngine = (() => {
 
       const t0 = this.video.currentTime;
       const i0 = Math.max(0, Math.floor(t0 / CHUNK));
-      const iMax = Math.min(this.lastIndex(), Math.floor((t0 + SCHEDULE_AHEAD) / CHUNK));
+      const iMax = Math.min(this.nChunks - 1, Math.floor((t0 + SCHEDULE_AHEAD) / CHUNK));
       const ctx0 = this.ctx.currentTime + 0.08;
       this.base = { ctx0, vid0: t0 };
 
       for (let i = i0; i <= iMax; i++) {
-        if (!this.processed.has(i)) continue; // zone pas prête : trou assumé + stall géré
+        if (!this.processed.has(i)) continue;
         const buf = await this.bufferFor(i);
         if (g !== this.gen || !this.active || this.video.paused) return;
         if (!buf) continue;
@@ -465,18 +502,22 @@ self.VocalisEngine = (() => {
       }
     }
 
+    downloadedTime() {
+      return this.mode === "incr" ? this.downloadedSec : this.duration;
+    }
+
     onVideoEvent = (ev) => {
       if (!this.active) return;
       switch (ev.type) {
         case "play":
+        case "seeked": {
           this.stalled = false;
-          this.setPriority(Math.floor(this.video.currentTime / CHUNK));
+          const t = this.video.currentTime;
+          const idx = Math.floor(t / CHUNK);
+          this.setPriorityIncr(idx);
           if (this.video.playbackRate === 1) this.reschedule();
           break;
-        case "seeked":
-          this.setPriority(Math.floor(this.video.currentTime / CHUNK));
-          if (this.video.playbackRate === 1 && !this.stalled) this.reschedule();
-          break;
+        }
         case "playing":
           this.stalled = false;
           if (this.video.playbackRate === 1) this.reschedule();
@@ -496,7 +537,7 @@ self.VocalisEngine = (() => {
             if (!this.rateNoticeShown) {
               this.rateNoticeShown = true;
               this.hooks.onNotice &&
-                this.hooks.onNotice("Vitesse ≠ ×1 : son original rétabli (pas de time-stretch en v0.3).");
+                this.hooks.onNotice("Vitesse ≠ ×1 : son original rétabli (pas de time-stretch).");
             }
           } else {
             this.video.muted = true;
@@ -509,10 +550,19 @@ self.VocalisEngine = (() => {
       }
     };
 
+    setPriorityIncr(idx) {
+      if (this.mode !== "incr") { this.setPriority(idx); return; }
+      this.setPriority(idx);
+      /* seek loin devant le téléchargement : on redémarre le flux à cet endroit */
+      if (idx * CHUNK > this.downloadedTime() + 10 && !this.processed.has(idx)) {
+        this._startStream(idx * CHUNK);
+      }
+    }
+
     async activate() {
       if (!this.started || this.active) return;
       if (this.video.playbackRate !== 1) {
-        this.hooks.onNotice && this.hooks.onNotice("Vitesse ≠ ×1 : son original (v0.3).");
+        this.hooks.onNotice && this.hooks.onNotice("Vitesse ≠ ×1 : son original.");
         return;
       }
 
@@ -532,11 +582,10 @@ self.VocalisEngine = (() => {
         if (!this.active || this.video.paused || this.stalled) return;
         if (this.video.playbackRate !== 1) return;
 
-        /* Zone non traitée sous la tête de lecture → écran « traitement » */
         const cur = Math.floor(this.video.currentTime / CHUNK);
         if (!this.processed.has(cur)) {
           this.stopSources();
-          this.setPriority(cur);
+          this.setPriorityIncr(cur);
           this.hooks.onStall &&
             this.hooks.onStall(Math.round((this.processed.size / this.nChunks) * 100));
           return;
@@ -578,6 +627,7 @@ self.VocalisEngine = (() => {
         active: this.active,
         videoId: this.videoId,
         duration: this.duration,
+        mode: this.mode,
         via: this.via || null,
         processedPct: this.nChunks ? Math.round((this.processed.size / this.nChunks) * 100) : 0,
       };
@@ -585,6 +635,7 @@ self.VocalisEngine = (() => {
 
     destroy() {
       this.aborted = true;
+      this.dead = true;
       this.deactivate();
       if (this.worker) this.worker.terminate();
       this.worker = null;

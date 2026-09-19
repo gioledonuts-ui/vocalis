@@ -156,6 +156,25 @@ Avantages :
   une zone non traitée : la file de traitement est réordonnée sur la tête de
   lecture et un écran « traitement… » s'affiche le temps du bloc courant.
 
+### Réalité v0.4 (chargement fragmenté)
+
+Le « tout télécharger puis tout décoder » de la v0.3 saturait la bande
+passante (la vidéo YouTube chargeait mal) et imposait de longues minutes
+d'attente. Le chemin par défaut est désormais **incrémental**, entièrement
+dans le worker :
+
+- flux **m4a/AAC** (itag 140) téléchargé par tranches de 4 Mo (Range) ;
+- démultiplexage **mp4box.js** au fil de l'eau ;
+- décodage **WebCodecs** (AudioDecoder, description AAC extraite de l'esds) ;
+- chaque bloc de 30 s décodé part au modèle, puis au cache/relecture ;
+- l'avance de téléchargement est bornée (~90 s au-delà du traitement) pour
+  laisser la bande passante à la vidéo ;
+- seek au-delà du téléchargement : le flux est réouvert à la bonne position
+  (moov relu, `ISOFile.seek`, estimation octet = débit × temps).
+
+Le chemin v0.3 (téléchargement + décodage complets) subsiste en repli si
+WebCodecs/mp4box/AAC manquent ou si le démultiplexage échoue.
+
 ## Composants du dépôt
 
 | Fichier | Rôle |

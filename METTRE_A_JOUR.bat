@@ -4,20 +4,17 @@ title Vocalis - Mise a jour
 
 rem ============================================================
 rem  VOCALIS - MISE A JOUR EN 1 CLIC (Windows 10/11)
-rem
-rem  Tout est fait avec des outils fournis par Windows :
-rem    curl.exe (telechargement), tar.exe (extraction),
-rem    robocopy.exe (copie), PowerShell (lecture du JSON GitHub).
-rem  Aucun git, aucune commande a copier.
-rem
-rem  Anti-ecrasement : ce fichier se copie d'abord dans %TEMP%
-rem  et s'execute depuis la-bas, ce qui lui permet de mettre a
-rem  jour TOUS les fichiers du dossier, y compris lui-meme.
+rem  Outils natifs Windows : curl.exe, tar.exe, robocopy.exe.
+rem  PowerShell ne sert qu'a lire le petit JSON GitHub (ecrit
+rem  dans des fichiers temporaires : AUCUN for /f, AUCUNE
+rem  parenthese piege pour cmd).
+rem  Anti-ecrasement : ce fichier se copie dans %TEMP% et
+rem  s'execute depuis la-bas.
 rem ============================================================
 
-rem --- bootstrap : lance sans argument (double-clic) ---
+rem --- bootstrap (double-clic, sans argument) ---
 if not "%~1"=="" goto MAIN
-where curl.exe >nul 2>&1 || ( echo [ERREUR] curl.exe introuvable : Windows 10 (1803) ou plus recent requis. & pause & exit /b 1 )
+where curl.exe >nul 2>&1 || ( echo [ERREUR] curl.exe introuvable : Windows 10 1803+ requis. & pause & exit /b 1 )
 copy /y "%~f0" "%TEMP%\vocalis-run.bat" >nul 2>&1
 if errorlevel 1 ( echo [ERREUR] Preparation impossible. & pause & exit /b 1 )
 call "%TEMP%\vocalis-run.bat" "%~dp0"
@@ -34,20 +31,15 @@ echo   VOCALIS - mise a jour depuis GitHub
 echo   Dossier : %TARGET%
 echo.
 
-rem --- 1) derniere release, sinon branche main ---
+rem --- 1) derniere release : JSON puis extraction via fichiers temporaires ---
 set "ZIPURL="
 set "VERSION="
 curl.exe -fsSL -H "User-Agent: vocalis-updater" "https://api.github.com/repos/%REPO%/releases/latest" -o "%TMPD%\rel.json" 2>nul
-if exist "%TMPD%\rel.json" (
-    for /f "usebackq delims=" %%L in (`powershell -NoProfile -Command "$j = Get-Content -Raw -Encoding UTF8 '%TMPD%\rel.json' | ConvertFrom-Json; $a = $j.assets | Where-Object { $_.name -like '*.zip' } | Select-Object -First 1; if ($a) { $a.browser_download_url } else { $j.zipball_url }; $j.tag_name"`) do (
-        if not defined ZIPURL (set "ZIPURL=%%L") else (set "VERSION=%%L")
-    )
-)
-if not defined ZIPURL (
-    echo   Aucune release trouvee : bascule sur la branche main.
-    set "ZIPURL=https://codeload.github.com/%REPO%/zip/refs/heads/main"
-    set "VERSION=main"
-)
+if exist "%TMPD%\rel.json" powershell -NoProfile -Command "try { $j = Get-Content -Raw -Encoding UTF8 '%TMPD%\rel.json' | ConvertFrom-Json; $a = $j.assets | Where-Object { $_.name -like '*.zip' } | Select-Object -First 1; if ($a) { Set-Content -Encoding ASCII -Path '%TMPD%\url.txt' -Value $a.browser_download_url } else { Set-Content -Encoding ASCII -Path '%TMPD%\url.txt' -Value $j.zipball_url }; Set-Content -Encoding ASCII -Path '%TMPD%\ver.txt' -Value $j.tag_name } catch { exit 0 }"
+if exist "%TMPD%\url.txt" set /p ZIPURL=<"%TMPD%\url.txt"
+if exist "%TMPD%\ver.txt" set /p VERSION=<"%TMPD%\ver.txt"
+if not defined ZIPURL set "ZIPURL=https://codeload.github.com/%REPO%/zip/refs/heads/main"
+if not defined VERSION set "VERSION=main"
 echo   Version : %VERSION%
 
 rem --- 2) telechargement ---
@@ -75,7 +67,7 @@ if not defined ROOT (
 )
 if not defined ROOT ( echo   [ERREUR] Archive invalide. & pause & exit /b 1 )
 
-rem --- 5) synchronisation du dossier (le .git eventuel est preserve) ---
+rem --- 5) synchronisation (le .git eventuel est preserve) ---
 echo   Mise a jour des fichiers...
 robocopy "%ROOT%" "%TARGET%" /MIR /XD ".git" /NFL /NDL /NJH /NJS
 if errorlevel 8 ( echo   [ERREUR] Copie impossible. & pause & exit /b 1 )
