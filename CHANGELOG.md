@@ -4,6 +4,16 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.4.7] — 2026-09-19
+
+### Corrigé
+- « Failed to construct 'Worker' » : un script de contenu ne peut PAS
+  créer de Worker chrome-extension:// (origine = page YouTube). Le
+  worker IA naît désormais dans un document « offscreen » de
+  l'extension (origine extension, tous les droits : imports, wasm,
+  WebGPU, modèle local) et les messages sont relayés proprement.
+  Toute la chaîne audio débloquée jusqu'au bout.
+
 ## [0.4.6] — 2026-09-19
 
 ### Corrigé

@@ -1,0 +1,9 @@
+<!doctype html>
+<!-- Page invisible dont le seul rôle est d'héberger le worker IA :
+     un script de contenu ne peut PAS créer de Worker chrome-extension://
+     (origine = page YouTube), mais une page de l'extension, si. -->
+<html>
+  <body>
+    <script type="module" src="offscreen.js"></script>
+  </body>
+</html>

@@ -11,6 +11,29 @@
 
 const BADGE_COLOR = "#7c3aed"; // violet Vocalis
 
+/* Document offscreen (hébergement du worker IA) : créé à la demande,
+   une seule instance. */
+let offscreenCreating = null;
+async function ensureOffscreen() {
+  try {
+    const existing = await chrome.runtime.getContexts({
+      contextTypes: ["OFFSCREEN_DOCUMENT"],
+    });
+    if (existing.length) return;
+  } catch { /* vieux Chrome : on tente la création, l'erreur « single document » est bénigne */ }
+  if (!offscreenCreating) {
+    offscreenCreating = chrome.offscreen
+      .createDocument({
+        url: "offscreen.html",
+        reasons: ["WORKERS"],
+        justification: "Hébergement du worker IA Vocalis (origine extension).",
+      })
+      .catch(() => { /* déjà créé en parallèle : sans gravité */ })
+      .finally(() => { offscreenCreating = null; });
+  }
+  await offscreenCreating;
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   // Nettoie les onglets activés d'une précédente session (les tabId ne survivent pas).
   chrome.storage.local.set({ enabledTabs: {} });
@@ -18,6 +41,13 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || typeof msg !== "object") return;
+
+  // Le content script demande le document offscreen (hébergement du worker
+  // IA : un content script ne peut pas créer de Worker chrome-extension://).
+  if (msg.type === "vocalis:ensure-offscreen") {
+    ensureOffscreen().then(() => sendResponse({ ok: true }));
+    return true; // réponse asynchrone
+  }
 
   // Ping simple pour vérifier que tout le monde se parle.
   if (msg.type === "vocalis:ping") {

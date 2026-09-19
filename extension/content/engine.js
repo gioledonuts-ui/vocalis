@@ -374,7 +374,9 @@ self.VocalisEngine = (() => {
     /* ---------------------------------------------------------- */
 
     spawnWorker() {
-      const w = new Worker(chrome.runtime.getURL("content/worker.js"), { type: "module" });
+      // Un content script ne peut pas créer de Worker chrome-extension:// :
+      // le proxy le fait naître dans le document offscreen de l'extension.
+      const w = new VocalisWorkerProxy();
       this.worker = w;
       w.onmessage = (e) => this.onWorkerMessage(e.data);
       w.onerror = (e) => {
