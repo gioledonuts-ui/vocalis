@@ -32,6 +32,7 @@ const MODEL_ID = "htdemucs_embedded_v1";
 const SEG_S = 10;
 
 const post = (msg, transfer = []) => self.postMessage(msg, transfer);
+const log = (msg) => post({ type: "log", msg });
 
 /* ---------------- Cache IndexedDB du modèle ---------------- */
 
@@ -92,42 +93,52 @@ async function downloadModel() {
 let processor = null;
 let doneCount = 0;
 let initStarted = false;
+let backend = null;
+let firstSep = true;
 
 async function ensureReady() {
   if (processor) return;
 
-  /* 1 — fichier local fourni avec l'extension (TELECHARGER_MODELE.bat) :
-        aucun réseau, aucun temps d'attente. */
+  /* 1 — fichier local fourni avec l'extension (TELECHARGER_MODELE.bat) */
   let buf = null;
-  let fromLocal = false;
+  let source = null;
   try {
     const local = await fetch(new URL("../models/htdemucs_embedded.onnx", import.meta.url).href);
     if (local.ok && (local.headers.get("content-length") === null ||
         parseInt(local.headers.get("content-length"), 10) > 1_000_000)) {
       buf = await local.arrayBuffer();
-      fromLocal = true;
+      source = "dossier local";
     }
   } catch { /* pas de fichier local */ }
 
   /* 2 — cache navigateur (IndexedDB) */
-  if (!buf) buf = await getCachedModel();
+  if (!buf) { buf = await getCachedModel(); if (buf) source = "cache navigateur"; }
   if (buf) {
-    post({ type: "model-download", pct: 100, cached: true, local: fromLocal });
+    post({ type: "model-download", pct: 100, cached: true });
   } else {
     /* 3 — téléchargement Hugging Face (une seule fois) */
+    source = "Hugging Face";
     buf = await downloadModel();
     await putCachedModel(buf).catch(() => {});
   }
+  log("modèle chargé depuis : " + source + " (" + Math.round(buf.byteLength / 1048576) + " Mo)");
 
+  const t0 = performance.now();
   processor = new DemucsProcessor({ ort });
   try {
     await processor.loadModel(buf);
+    backend = "webgpu";
   } catch {
     processor = new DemucsProcessor({
       ort,
       sessionOptions: { executionProviders: ["wasm"], graphOptimizationLevel: "basic" },
     });
     await processor.loadModel(buf);
+    backend = "wasm";
+  }
+  log("session IA prête en " + Math.round(performance.now() - t0) + " ms — backend : " + backend);
+  if (backend === "wasm") {
+    log("ATTENTION : WebGPU indisponible, repli WASM (beaucoup plus lent).");
   }
 }
 
@@ -142,7 +153,12 @@ async function pumpSeg() {
   const { idx, L, R } = segQueue.shift();
   try {
     if (!skip.has(idx)) {
+      const t0 = performance.now();
       const res = await processor.separate(L, R);
+      if (firstSep) {
+        firstSep = false;
+        log("1er bloc de 10 s séparé en " + Math.round(performance.now() - t0) + " ms (" + backend + ")");
+      }
       doneCount++;
       post(
         { type: "done", index: idx, left: res.vocals.left.buffer, right: res.vocals.right.buffer },
@@ -161,6 +177,7 @@ async function pumpSeg() {
 let streamer = null;
 
 function startStream(url, fromTime, skipList) {
+  log("flux incrémental démarré à " + Math.round(fromTime) + " s");
   skip.clear();
   for (const i of skipList || []) skip.add(i);
   streamer?.destroy();

@@ -50,6 +50,7 @@ self.VocalisInnertube = (() => {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            signal: AbortSignal.timeout(6000), // une requête qui traîne = client suivant
             body: JSON.stringify({
               videoId,
               context: { client },

@@ -4,6 +4,16 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.4.3] — 2026-09-19
+
+### Ajouté
+- **Journal de bord dans le popup** (horodaté) : source du modèle, backend
+  WebGPU/WASM + durée de chargement de la session, durée du 1er bloc séparé,
+  voie du flux (page/innertube/déchiffrement), progression du téléchargement,
+  bascules legacy. Permet de voir EXACTEMENT où ça traîne sur ta machine.
+- Timeouts réseau partout (innertube 6 s, base.js 8 s, tranche flux 20 s) :
+  plus aucune requête ne peut pendouiller silencieusement.
+
 ## [0.4.2] — 2026-09-19
 
 ### Corrigé (cause racine de TOUS les échecs du .bat depuis le début)

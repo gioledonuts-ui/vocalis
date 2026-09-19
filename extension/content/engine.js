@@ -127,7 +127,7 @@ self.VocalisEngine = (() => {
       const jsUrl = this.extras?.playerJsUrl;
       if (jsUrl) {
         try {
-          const baseJs = await (await fetch(jsUrl)).text();
+          const baseJs = await (await fetch(jsUrl, { signal: AbortSignal.timeout(8000) })).text();
           const cands = (pr?.streamingData?.adaptiveFormats || [])
             .filter((f) => f.signatureCipher && (f.mimeType || "").startsWith("audio/"))
             .sort((a, b) => (b.bitrate || b.averageBitrate || 0) - (a.bitrate || a.averageBitrate || 0));
@@ -172,6 +172,8 @@ self.VocalisEngine = (() => {
 
       const src = await this.resolveAudioSource(pr);
       this.via = src.via;
+      this.hooks.onLog && this.hooks.onLog("flux audio obtenu via : " + src.via +
+        (src.m4a ? " (m4a OK → mode fragmenté)" : " (pas de m4a → mode complet)"));
       if (!src.best) {
         this.hooks.onError &&
           this.hooks.onError(
@@ -188,6 +190,8 @@ self.VocalisEngine = (() => {
 
       const incrOk =
         src.m4a && typeof AudioDecoder !== "undefined" && typeof MP4Box !== "undefined";
+      this.hooks.onLog && this.hooks.onLog("WebCodecs/mp4box dispo : " +
+        (typeof AudioDecoder !== "undefined") + "/" + (typeof MP4Box !== "undefined"));
 
       if (incrOk) {
         this.mode = "incr";
@@ -220,6 +224,7 @@ self.VocalisEngine = (() => {
 
     _fallback() {
       if (this.started || this.mode !== "incr") return;
+      this.hooks.onLog && this.hooks.onLog("bascule mode complet (flux fragmenté en échec)");
       this.mode = "legacy-pending";
       this.worker.postMessage({ type: "stream-stop" });
       this.hooks.onNotice &&
@@ -320,7 +325,9 @@ self.VocalisEngine = (() => {
 
     onWorkerMessage(msg) {
       if (this.aborted) return;
-      if (msg.type === "model-download") {
+      if (msg.type === "log") {
+        this.hooks.onLog && this.hooks.onLog(msg.msg);
+      } else if (msg.type === "model-download") {
         this.phase("model", msg.pct, msg);
       } else if (msg.type === "ready") {
         this.workerReady = true;

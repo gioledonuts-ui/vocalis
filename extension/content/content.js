@@ -18,7 +18,17 @@
     engine: null,
     currentVideoId: null,
     status: { phase: null, pct: null, notice: null },
+    journal: [],
   };
+
+  function logLine(msg) {
+    const t = new Date();
+    const hh = String(t.getHours()).padStart(2, "0") + ":" +
+      String(t.getMinutes()).padStart(2, "0") + ":" +
+      String(t.getSeconds()).padStart(2, "0");
+    state.journal.push(hh + "  " + msg);
+    if (state.journal.length > 40) state.journal.shift();
+  }
 
   const MB = (b) => (b / 1048576).toFixed(1) + " Mo";
 
@@ -138,6 +148,11 @@
       onPhase: (name, pct, info) => {
         state.status.phase = name;
         state.status.pct = pct;
+        if (name === "download" && pct != null && info?.seconds != null) {
+          if (pct % 20 === 0) logLine("réception audio : " + pct + " % (" + Math.round(info.seconds) + " s)");
+        } else if (name === "model" && pct != null && !info?.cached) {
+          if (pct % 25 === 0) logLine("téléchargement modèle : " + pct + " %");
+        }
         if (!state.enabled) return;
         if (name === "response") {
           showOverlay({ title: "Lecture du lecteur YouTube…", pct: null });
@@ -176,6 +191,7 @@
           });
         }
       },
+      onLog: (msg) => { logLine(msg); },
       onProcessed: (ranges, duration) => {
         updateBufferBar(ranges, duration);
       },
@@ -274,6 +290,7 @@
         processedPct: state.engine?.status().processedPct ?? null,
         via: state.engine?.status().via ?? null,
         mode: state.engine?.status().mode ?? null,
+        journal: state.journal.slice(-12),
       });
     }
   });

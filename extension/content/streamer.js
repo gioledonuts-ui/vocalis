@@ -94,10 +94,12 @@ self.VocalisStreamer = (() => {
 
     async _fetchRange(start, end) {
       this.ctl = new AbortController();
+      const timer = setTimeout(() => this.ctl.abort(), 20000); // tranche qui traîne = erreur propre
       const resp = await fetch(this.url, {
         headers: { Range: `bytes=${start}-${end}` },
         signal: this.ctl.signal,
       });
+      clearTimeout(timer);
       if (!resp.ok && resp.status !== 206) throw new Error("HTTP " + resp.status);
       if (!this.total) {
         const cr = resp.headers.get("content-range");

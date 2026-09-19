@@ -103,6 +103,15 @@ async function refresh() {
   } else {
     progressZone.classList.add("hidden");
   }
+
+  const journalEl = document.getElementById("journal");
+  if (st.journal && st.journal.length) {
+    journalEl.classList.remove("hidden");
+    journalEl.textContent = st.journal.join("\n");
+    journalEl.scrollTop = journalEl.scrollHeight;
+  } else {
+    journalEl.classList.add("hidden");
+  }
 }
 
 btn.addEventListener("click", async () => {
