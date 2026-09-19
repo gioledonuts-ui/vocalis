@@ -4,6 +4,16 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.3.1] — 2026-09-19
+
+### Corrigé
+- **Erreur « Aucun flux audio accessible » sur les vidéos normales** : YouTube
+  ne donne plus d'URL en clair au lecteur web. Ajout de deux couches
+  d'obtention du flux : requête youtubei/v1/player (clients TV/Android,
+  URLs en clair) puis déchiffrement `signatureCipher` + paramètre `n` depuis
+  le JS du lecteur (mini-bundler + eval du code public de Google).
+- Message d'erreur précisant les couches testées, pour le diagnostic.
+
 ## [0.3.0] — 2026-09-19
 
 ### Ajouté

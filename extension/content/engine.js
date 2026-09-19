@@ -99,6 +99,50 @@ self.VocalisEngine = (() => {
       return audio[0];
     }
 
+    /**
+     * Cascade d'obtention d'une URL audio utilisable :
+     *  1. URLs en clair du playerResponse de la page ;
+     *  2. requête youtubei/v1/player avec des clients TV/Android
+     *     (reçoivent souvent des URLs en clair) ;
+     *  3. déchiffrement signatureCipher + paramètre n depuis base.js.
+     */
+    async resolveAudioSource(pr) {
+      const direct = this.pickFormat(pr);
+      if (direct) return { fmt: direct, via: "page" };
+
+      const apiKey =
+        this.extras?.apiKey || "AIzaSyAO_FJ2SlqU8Q4STEHLNlTpqUcavnZbsC8";
+      const it = await VocalisInnertube.query(pr.videoDetails.videoId, apiKey);
+      if (it) {
+        const formats = it.formats.sort(
+          (a, b) => (b.bitrate || b.averageBitrate || 0) - (a.bitrate || a.averageBitrate || 0)
+        );
+        return { fmt: formats[0], via: it.client };
+      }
+
+      const jsUrl = this.extras?.playerJsUrl;
+      if (jsUrl) {
+        try {
+          const baseJs = await (await fetch(jsUrl)).text();
+          const cands = (pr?.streamingData?.adaptiveFormats || [])
+            .filter(
+              (f) => f.signatureCipher && (f.mimeType || "").startsWith("audio/")
+            )
+            .sort(
+              (a, b) => (b.bitrate || b.averageBitrate || 0) - (a.bitrate || a.averageBitrate || 0)
+            );
+          for (const f of cands) {
+            const solved = VocalisCipher.solve(baseJs, f.signatureCipher);
+            if (solved) return { fmt: { ...f, url: solved.url }, via: "déchiffrement" };
+          }
+        } catch {
+          /* déchiffrement indisponible */
+        }
+      }
+
+      return { fmt: null };
+    }
+
     /* ---------------------------------------------------------- */
     /* Pipeline                                                    */
     /* ---------------------------------------------------------- */
@@ -107,8 +151,10 @@ self.VocalisEngine = (() => {
       this.running = true;
 
       this.phase("response");
-      const pr = await this.getPlayerResponse();
+      const payload = await this.getPlayerResponse();
       if (this.aborted) return;
+      const pr = payload?.pr;
+      this.extras = payload || {};
       if (!pr?.videoDetails?.videoId) {
         this.hooks.onError && this.hooks.onError("Impossible de lire le lecteur YouTube.");
         return;
@@ -117,11 +163,16 @@ self.VocalisEngine = (() => {
         this.hooks.onError && this.hooks.onError("Les directs ne sont pas encore gérés (v0.3).");
         return;
       }
-      const fmt = this.pickFormat(pr);
+      const { fmt, via } = await this.resolveAudioSource(pr);
       if (!fmt) {
-        this.hooks.onError && this.hooks.onError("Aucun flux audio accessible (vidéo protégée ?).");
+        this.hooks.onError &&
+          this.hooks.onError(
+            "Aucun flux audio utilisable (couches testées : page, innertube, déchiffrement). " +
+              "Vidéo protégée, ou YouTube a changé ses verrous — signale-le avec ce message."
+          );
         return;
       }
+      this.via = via;
       this.videoId = pr.videoDetails.videoId;
 
       /* Téléchargement */
@@ -527,6 +578,7 @@ self.VocalisEngine = (() => {
         active: this.active,
         videoId: this.videoId,
         duration: this.duration,
+        via: this.via || null,
         processedPct: this.nChunks ? Math.round((this.processed.size / this.nChunks) * 100) : 0,
       };
     }

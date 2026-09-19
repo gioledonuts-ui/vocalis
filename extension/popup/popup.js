@@ -80,11 +80,13 @@ async function refresh() {
   }
 
   if (st.notice) statusEl.textContent = st.notice;
-  else if (st.active)
+  else if (st.active) {
+    const bits = [];
+    if (st.processedPct != null) bits.push(st.processedPct + " % traité");
+    if (st.via) bits.push("flux via " + st.via);
     statusEl.textContent =
-      `Musique retirée, son synchronisé.` +
-      (st.processedPct != null ? ` (${st.processedPct} % de la vidéo traité.)` : "");
-  else if (st.started) statusEl.textContent = "Voix prêtes — bascule de la lecture…";
+      "Musique retirée, son synchronisé." + (bits.length ? " (" + bits.join(", ") + ")" : "");
+  } else if (st.started) statusEl.textContent = "Voix prêtes — bascule de la lecture…";
   else statusEl.textContent = "Pipeline en cours…";
 
   if (!st.active && st.phase) {

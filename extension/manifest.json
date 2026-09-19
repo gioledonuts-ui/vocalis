@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Vocalis — YouTube sans musique",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Retire la musique de fond des vidéos YouTube, en local sur ton PC (HTDemucs ONNX, WebGPU). Tout reste sur ta machine.",
   "minimum_chrome_version": "116",
   "permissions": [
@@ -10,7 +10,8 @@
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
-    "*://*.googlevideo.com/*"
+    "*://*.googlevideo.com/*",
+    "*://*.ytimg.com/*"
   ],
   "action": {
     "default_title": "Vocalis",

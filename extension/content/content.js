@@ -240,6 +240,7 @@
         notice: state.status.notice,
         videoId: state.currentVideoId,
         processedPct: state.engine?.status().processedPct ?? null,
+        via: state.engine?.status().via ?? null,
       });
     }
   });

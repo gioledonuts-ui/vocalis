@@ -39,9 +39,33 @@
     const d = e.data;
     if (!d || d.source !== "vocalis-content") return;
     if (d.type === "get-player-response") {
-      send("player-response", playerResponse());
+      send("player-response", {
+        pr: playerResponse(),
+        playerJsUrl: playerJsUrl(),
+        apiKey: apiKey(),
+      });
     }
   });
+
+  function playerJsUrl() {
+    try {
+      const js =
+        playerResponse()?.assets?.js ||
+        (window.ytplayer && window.ytplayer.config && window.ytplayer.config.assets?.js);
+      if (!js) return null;
+      return js.startsWith("http") ? js : "https://www.youtube.com" + js;
+    } catch {
+      return null;
+    }
+  }
+
+  function apiKey() {
+    try {
+      return (window.ytcfg && window.ytcfg.get && window.ytcfg.get("INNERTUBE_API_KEY")) || null;
+    } catch {
+      return null;
+    }
+  }
 
   /* Détection de changement de vidéo (navigation SPA) */
   let lastVideoId = null;
