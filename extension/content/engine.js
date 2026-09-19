@@ -147,6 +147,7 @@ self.VocalisEngine = (() => {
         out.m4a = f(it.formats.filter((x) => (x.mimeType || "").startsWith("audio/mp4"))) || null;
         out.best = f(it.formats);
         out.via = it.client;
+        out.ua = it.userAgent;
         if (out.best) return out;
       }
 
@@ -253,10 +254,12 @@ self.VocalisEngine = (() => {
       this.hooks.onLog && this.hooks.onLog("lancement du worker IA…");
       this.spawnWorker();
 
-      const incrOk =
-        src.m4a && typeof AudioDecoder !== "undefined" && typeof MP4Box !== "undefined";
-      this.hooks.onLog && this.hooks.onLog("WebCodecs/mp4box dispo : " +
-        (typeof AudioDecoder !== "undefined") + "/" + (typeof MP4Box !== "undefined"));
+      // mp4box vit DANS le worker (module ES) : ici on ne vérifie que
+      // WebCodecs ; si le worker n'a pas mp4box, il émettra stream-error.
+      const incrOk = src.m4a && typeof AudioDecoder !== "undefined";
+      this.streamUA = src.ua || null;
+      this.hooks.onLog && this.hooks.onLog("WebCodecs dispo (page) : " +
+        (typeof AudioDecoder !== "undefined"));
 
       if (incrOk) {
         this.mode = "incr";
@@ -281,6 +284,7 @@ self.VocalisEngine = (() => {
       this.worker.postMessage({
         type: this.streamStarted ? "stream-restart" : "stream",
         url: this.incrFmt.url,
+        ua: this.streamUA,
         fromTime,
         skip: [...this.processed],
       });
@@ -306,7 +310,12 @@ self.VocalisEngine = (() => {
       this.phase("download", 0);
       let arrayBuf;
       try {
-        const resp = await fetch(fmt.url);
+        let resp = await fetch(fmt.url);
+        if (!resp.ok && resp.status === 403) {
+          this.hooks.onLog &&
+            this.hooks.onLog("legacy : fetch direct 403, tentative par tranches Range…");
+          resp = await fetch(fmt.url, { headers: { Range: "bytes=0-1048575" } });
+        }
         if (!resp.ok || !resp.body) throw new Error("HTTP " + resp.status);
         const total = parseInt(resp.headers.get("content-length") || "0", 10);
         const reader = resp.body.getReader();
@@ -321,8 +330,13 @@ self.VocalisEngine = (() => {
           if (total) this.phase("download", Math.round((received / total) * 100), { received, total });
         }
         arrayBuf = await new Blob(chunks).arrayBuffer();
-      } catch {
-        this.hooks.onError && this.hooks.onError("Téléchargement de l'audio impossible.");
+      } catch (e) {
+        if (this.aborted) return;
+        this.fatal = true;
+        this.hooks.onLog &&
+          this.hooks.onLog("ERREUR téléchargement legacy : " + (e?.message || e));
+        this.hooks.onError &&
+          this.hooks.onError("Téléchargement de l'audio impossible (" + (e?.message || e) + ").");
         return;
       }
       if (this.aborted) return;

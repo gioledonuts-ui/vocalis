@@ -176,12 +176,13 @@ async function pumpSeg() {
 
 let streamer = null;
 
-function startStream(url, fromTime, skipList) {
+function startStream(url, fromTime, skipList, ua) {
   log("flux incrémental démarré à " + Math.round(fromTime) + " s");
   skip.clear();
   for (const i of skipList || []) skip.add(i);
   streamer?.destroy();
   streamer = new self.VocalisStreamer(url, {
+    ua,
     onDownload: (pct, seconds) => post({ type: "stream-download", pct, seconds }),
     onSegment: (idx, L, R) => {
       segQueue.push({ idx, L: new Float32Array(L), R: new Float32Array(R) });
@@ -209,12 +210,12 @@ self.onmessage = async (e) => {
       ensureReady().then(() => { post({ type: "ready" }); pumpSeg(); }).catch((e) => {
         post({ type: "error", message: String((e && e.message) || e) });
       });
-      startStream(msg.url, msg.fromTime || 0, msg.skip);
+      startStream(msg.url, msg.fromTime || 0, msg.skip, msg.ua);
     } else if (msg.type === "stream") {
-      startStream(msg.url, msg.fromTime || 0, msg.skip);
+      startStream(msg.url, msg.fromTime || 0, msg.skip, msg.ua);
     } else if (msg.type === "stream-restart") {
       segQueue.length = 0;
-      startStream(msg.url, msg.fromTime || 0, msg.skip);
+      startStream(msg.url, msg.fromTime || 0, msg.skip, msg.ua);
     } else if (msg.type === "stream-stop") {
       streamer?.destroy();
       streamer = null;

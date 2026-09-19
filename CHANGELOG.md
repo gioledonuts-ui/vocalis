@@ -4,6 +4,21 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.4.8] — 2026-09-19
+
+### Corrigé
+- « Téléchargement de l'audio impossible » : détection erronée du mode
+  fragmenté (mp4box n'était vérifié qu'au niveau page alors qu'il vit
+  dans le worker), ce qui forçait à tort le mode complet « legacy »
+  et provoquait un 403 sur le CDN YouTube.
+- Ajout du client `VISIONOS` (Apple Vision Pro) en tête de liste :
+  client anonyme par défaut de yt-dlp 2026, URLs directes sans bot-check.
+- Tranches de téléchargement fragmenté réduites à 1 Mo (conforme aux
+  limites googlevideo CDN).
+- Protocole offscreen document stabilisé via un port bidirectionnel
+  `chrome.runtime.connect` direct (évite l'appel interdit à chrome.tabs
+  depuis une page offscreen).
+
 ## [0.4.7] — 2026-09-19
 
 ### Corrigé

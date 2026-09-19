@@ -23,7 +23,7 @@ import * as MP4Box from "../lib/mp4box/mp4box.all.mjs";
 self.VocalisStreamer = (() => {
   "use strict";
 
-  const RANGE = 4 * 1024 * 1024;      // taille d'une tranche téléchargée
+  const RANGE = 1024 * 1024;          // taille d'une tranche (1 Mo borné, accepté par tous les CDN)
   const SEG = 10;                     // durée d'un segment émis (s)
   const SR = 44100;                   // fréquence native de l'itag 140
   const LOOKAHEAD_S = 90;             // avance max de téléchargement sur le traitement
@@ -62,7 +62,15 @@ self.VocalisStreamer = (() => {
       this.mp4.onSamples = (id, user, samples) => this._onSamples(samples);
 
       /* 1re tranche : elle contient le moov (index du fichier) */
-      const first = await this._fetchRange(0, RANGE - 1);
+      let first;
+      try {
+        first = await this._fetchRange(0, RANGE - 1);
+      } catch (e) {
+        if (!this.dead) this.hooks.onError &&
+          this.hooks.onError("Première tranche refusée" +
+            (e?.message ? " (" + e.message + ")" : "") + ".");
+        return;
+      }
       if (this.dead) return;
       this.mp4.appendBuffer(first);
 
@@ -79,8 +87,10 @@ self.VocalisStreamer = (() => {
         let buf;
         try {
           buf = await this._fetchRange(pos, end);
-        } catch {
-          if (!this.dead) this.hooks.onError && this.hooks.onError("Téléchargement interrompu.");
+        } catch (e) {
+          if (!this.dead) this.hooks.onError &&
+            this.hooks.onError("Téléchargement interrompu" +
+              (e?.message ? " (" + e.message + ")" : "") + ".");
           return;
         }
         if (this.dead) return;
@@ -95,8 +105,13 @@ self.VocalisStreamer = (() => {
     async _fetchRange(start, end) {
       this.ctl = new AbortController();
       const timer = setTimeout(() => this.ctl.abort(), 20000); // tranche qui traîne = erreur propre
+      const headers = { Range: `bytes=${start}-${end}` };
+      // Certains clients (visionOS…) exigent le même User-Agent au
+      // téléchargement qu'à la demande player ; le worker vit en contexte
+      // extension, où ce header est autorisé.
+      if (this.hooks.ua) headers["User-Agent"] = this.hooks.ua;
       const resp = await fetch(this.url, {
-        headers: { Range: `bytes=${start}-${end}` },
+        headers,
         signal: this.ctl.signal,
       });
       clearTimeout(timer);
