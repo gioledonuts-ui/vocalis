@@ -1,0 +1,22 @@
+# Dépendances / outils
+node_modules/
+.venv/
+venv/
+__pycache__/
+
+# Artefacts de build et de release (les zips vivent dans les GitHub Releases, pas dans git)
+dist/
+build/
+*.zip
+
+# Modèles IA (ONNX, PyTorch…) : trop lourds pour git, téléchargés à part
+*.onnx
+*.pth
+*.pt
+*.bin
+
+# Divers
+.DS_Store
+Thumbs.db
+*.log
+tmp/

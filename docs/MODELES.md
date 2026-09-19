@@ -1,0 +1,51 @@
+# Choix du modèle de séparation audio
+
+> Contrainte forte du projet : **bonne qualité audible**. On ne veut pas du
+> modèle le plus léger si c'est pour des voix métalliques ou de la musique
+> résiduelle. La vitesse compte aussi, car tout tourne sur le PC du streamer
+> pendant qu'il regarde la vidéo.
+
+## Ce qu'on demande au modèle
+
+1. Séparer **voix** (dialogue, narration) et **musique de fond**.
+2. Qualité : SDR élevé sur les voix, peu d'artefacts (« musical noise »).
+3. Vitesse : idéalement plus rapide que le temps réel sur un GPU récent
+   (mode pré-chargement), sinon le plus proche possible.
+4. Exécutable en local dans le navigateur : export **ONNX**, via
+   [ONNX Runtime Web](https://onnxruntime.ai/docs/tutorials/web/) (WebGPU/WASM).
+5. Licence compatible (MIT/Apache ou équivalent).
+
+## Comparatif (état des lieux)
+
+| Modèle | Qualité voix | Vitesse | Taille approx. | Licence | Remarques |
+|---|---|---|---|---|---|
+| **Demucs v4 (htdemucs)** | Très bonne (~8,8 dB SDR) | Moyenne | ~80 Mo (ONNX) | MIT | Référence robuste, exports ONNX connus |
+| **Demucs v4 fine-tuned (htdemucs_ft)** | Excellente (~10 dB+) | Plus lent (×4 passes) | ~80 Mo (ONNX) | MIT | Le meilleur des Demucs ; lourd en CPU |
+| **BS-RoFormer / Mel-Band RoFormer** (type UVR) | Excellente sur les voix | Rapide | 50–150 Mo selon variante | À vérifier par checkpoint | Très bons résultats sur voix/narration, plusieurs variantes communautaires |
+| **Spleeter 2 stems** | Moyenne | Rapide | ~30 Mo | MIT | Historique, artefacts audibles ; écarté vu l'exigence qualité |
+
+## Décision de travail (v0.3)
+
+- **Point de départ : `htdemucs`** (Demucs v4 hybride) — MIT, robuste, des
+  exports ONNX existent et le runtime WebGPU sait l'exécuter. C'est le
+  meilleur compromis qualité/vitesse/fiabilité pour démarrer.
+- **Challenger : un checkpoint BS-RoFormer** orienté voix, à benchmarker sur
+  la machine du streamer. S'il est plus rapide à qualité égale ou meilleure,
+  il devient le défaut.
+- `htdemucs_ft` reste une **option « qualité max »** activable dans les
+  réglages (v0.4) pour les configs puissantes.
+
+> ⚠️ À confirmer avant la v0.3 : la licence exacte du checkpoint RoFormer
+> retenu (les poids communautaires ne se valent pas tous) et la présence
+> d'un export ONNX stable.
+
+## Implications concrètes
+
+- Le modèle est téléchargé **une seule fois** au premier usage (asset de
+  release GitHub), jamais stocké dans git.
+- Les segments (~10 s) sont traités par lots ; sur un GPU récent (WebGPU),
+  une seconde de calcul doit traiter plusieurs secondes d'audio → le mode
+  « pré-chargement puis arrière-plan » est confortable.
+- Sur CPU seul (WASM simple thread), le traitement peut être plus lent que
+  la lecture : l'interface devra l'afficher clairement et proposer un
+  pré-chargement plus généreux. C'est le principal point d'attention.

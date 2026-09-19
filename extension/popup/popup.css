@@ -1,0 +1,90 @@
+:root {
+  --bg: #14121f;
+  --card: #1e1b2e;
+  --border: #322d4a;
+  --text: #ece9f7;
+  --muted: #9a93b8;
+  --accent: #8b5cf6;
+  --accent-2: #22d3ee;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  width: 300px;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+h1 { font-size: 16px; letter-spacing: 0.3px; }
+.tagline { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+/* Mini forme d'onde en guise de logo */
+.logo { display: flex; align-items: center; gap: 3px; height: 28px; }
+.logo .bar {
+  width: 4px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+}
+.b1 { height: 10px; } .b2 { height: 20px; } .b3 { height: 28px; }
+.b4 { height: 16px; } .b5 { height: 22px; }
+
+main { padding: 16px; }
+
+#toggle {
+  width: 100%;
+  padding: 11px 14px;
+  border: none;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  color: white;
+  background: linear-gradient(90deg, var(--accent), #6d28d9);
+  transition: filter 0.15s, transform 0.05s;
+}
+#toggle:hover:not(:disabled) { filter: brightness(1.12); }
+#toggle:active:not(:disabled) { transform: scale(0.985); }
+#toggle:disabled { opacity: 0.45; cursor: default; }
+#toggle.on { background: linear-gradient(90deg, #475569, #334155); }
+
+.status { margin-top: 12px; color: var(--muted); line-height: 1.45; min-height: 18px; }
+
+.progress-zone { margin-top: 14px; }
+.progress-zone.hidden { display: none; }
+.progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--card);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 0.3s;
+}
+.progress-label { margin-top: 6px; font-size: 11px; color: var(--muted); }
+
+footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+}
+.dot { opacity: 0.6; }

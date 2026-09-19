@@ -1,0 +1,131 @@
+/* ============================================================
+   Vocalis — styles injectés sur les pages YouTube
+   ============================================================ */
+
+:root {
+  --vocalis-bg: #14121f;
+  --vocalis-card: #1e1b2ee6;
+  --vocalis-border: #322d4a;
+  --vocalis-text: #ece9f7;
+  --vocalis-muted: #9a93b8;
+  --vocalis-accent: #8b5cf6;
+  --vocalis-accent-2: #22d3ee;
+}
+
+/* ------------------------------------------------------------
+   Overlay de chargement (posé sur le lecteur vidéo)
+   ------------------------------------------------------------ */
+#vocalis-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 8, 18, 0.82);
+  backdrop-filter: blur(3px);
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+#vocalis-overlay .vocalis-card {
+  width: min(420px, 82%);
+  padding: 28px 30px;
+  border-radius: 16px;
+  background: var(--vocalis-card);
+  border: 1px solid var(--vocalis-border);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  color: var(--vocalis-text);
+  text-align: center;
+}
+
+/* Forme d'onde animée */
+#vocalis-overlay .vocalis-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 34px;
+  margin-bottom: 14px;
+}
+#vocalis-overlay .vocalis-logo span {
+  width: 5px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--vocalis-accent), var(--vocalis-accent-2));
+  animation: vocalis-pulse 1s ease-in-out infinite;
+}
+#vocalis-overlay .vocalis-logo span:nth-child(1) { height: 12px; animation-delay: 0s; }
+#vocalis-overlay .vocalis-logo span:nth-child(2) { height: 24px; animation-delay: 0.15s; }
+#vocalis-overlay .vocalis-logo span:nth-child(3) { height: 34px; animation-delay: 0.3s; }
+#vocalis-overlay .vocalis-logo span:nth-child(4) { height: 20px; animation-delay: 0.45s; }
+#vocalis-overlay .vocalis-logo span:nth-child(5) { height: 28px; animation-delay: 0.6s; }
+
+@keyframes vocalis-pulse {
+  0%, 100% { transform: scaleY(0.55); opacity: 0.7; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+#vocalis-overlay .vocalis-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+#vocalis-overlay .vocalis-subtitle {
+  font-size: 13px;
+  color: var(--vocalis-muted);
+  margin: 0 0 18px;
+  line-height: 1.5;
+}
+
+#vocalis-overlay .vocalis-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: #0e0c17;
+  border: 1px solid var(--vocalis-border);
+  overflow: hidden;
+}
+#vocalis-overlay .vocalis-progress-fill {
+  height: 100%;
+  width: 35%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--vocalis-accent), var(--vocalis-accent-2));
+}
+#vocalis-overlay .vocalis-progress-fill.indeterminate {
+  animation: vocalis-slide 1.4s ease-in-out infinite;
+}
+@keyframes vocalis-slide {
+  0% { margin-left: -35%; }
+  100% { margin-left: 100%; }
+}
+
+#vocalis-overlay .vocalis-note {
+  margin: 16px 0 0;
+  font-size: 11px;
+  color: var(--vocalis-muted);
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------
+   Barre « son traité » — posée juste au-dessus de la barre de
+   progression YouTube (.ytp-progress-bar). Même principe que la
+   barre grise de buffer vidéo, mais pour le son sans musique.
+   ------------------------------------------------------------ */
+#vocalis-bufferbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;           /* juste au-dessus de la barre rouge */
+  height: 3px;
+  margin-bottom: 3px;
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 70;
+}
+#vocalis-bufferbar .vocalis-bufferbar-seg {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--vocalis-accent), var(--vocalis-accent-2));
+  opacity: 0.9;
+  box-shadow: 0 0 6px rgba(139, 92, 246, 0.7);
+}

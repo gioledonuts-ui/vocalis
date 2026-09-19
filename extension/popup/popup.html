@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <span class="bar b1"></span><span class="bar b2"></span><span class="bar b3"></span>
+      <span class="bar b4"></span><span class="bar b5"></span>
+    </div>
+    <div>
+      <h1>Vocalis</h1>
+      <p class="tagline">YouTube sans musique de fond</p>
+    </div>
+  </header>
+
+  <main>
+    <button id="toggle" disabled>…</button>
+    <p id="status" class="status">Chargement…</p>
+    <div id="progress-zone" class="progress-zone hidden">
+      <div class="progress"><div class="progress-fill" id="progress-fill"></div></div>
+      <p class="progress-label" id="progress-label"></p>
+    </div>
+  </main>
+
+  <footer>
+    <span id="version"></span>
+    <span class="dot">·</span>
+    <span>traitement 100&nbsp;% local</span>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
