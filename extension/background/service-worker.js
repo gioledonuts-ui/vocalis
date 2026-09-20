@@ -22,61 +22,20 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
-async function setupNetRules(ua) {
-  const userAgent = ua || "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip";
+async function cleanNetRules() {
   try {
-    await chrome.declarativeNetRequest.updateDynamicRules({
-      removeRuleIds: [1001],
-      addRules: [
-        {
-          id: 1001,
-          priority: 1,
-          action: {
-            type: "modifyHeaders",
-            requestHeaders: [
-              {
-                header: "user-agent",
-                operation: "set",
-                value: userAgent,
-              },
-            ],
-            responseHeaders: [
-              {
-                header: "access-control-allow-origin",
-                operation: "set",
-                value: "*",
-              },
-              {
-                header: "access-control-allow-methods",
-                operation: "set",
-                value: "GET, HEAD, OPTIONS",
-              },
-              {
-                header: "access-control-allow-headers",
-                operation: "set",
-                value: "*",
-              },
-              {
-                header: "access-control-expose-headers",
-                operation: "set",
-                value: "Content-Length, Content-Range, Accept-Ranges",
-              },
-            ],
-          },
-          condition: {
-            urlFilter: "googlevideo.com",
-            resourceTypes: ["xmlhttprequest", "other", "media"],
-          },
-        },
-      ],
-    });
+    const existing = await chrome.declarativeNetRequest.getDynamicRules();
+    const ids = existing.map((r) => r.id);
+    if (ids.length) {
+      await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: ids });
+    }
   } catch (e) {
-    console.error("Erreur declarativeNetRequest :", e);
+    console.error("cleanNetRules:", e);
   }
 }
 
-// Initialise immédiatement les règles réseau dès le démarrage
-setupNetRules();
+// Nettoie immédiatement toute règle résiduelle pouvant bloquer le lecteur YouTube
+cleanNetRules();
 
 /* Document offscreen (hébergement du worker IA) : créé à la demande,
    une seule instance. */
@@ -104,7 +63,7 @@ async function ensureOffscreen() {
 chrome.runtime.onInstalled.addListener(async () => {
   // Nettoie les onglets activés d'une précédente session (les tabId ne survivent pas).
   chrome.storage.local.set({ enabledTabs: {} });
-  await setupNetRules();
+  await cleanNetRules();
 
   // Ré-injection automatique sur les onglets YouTube ouverts afin que l'utilisateur
   // n'ait pas besoin de recharger la page après une mise à jour de l'extension.
@@ -141,25 +100,48 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true; // réponse asynchrone
   }
 
-  // Définit le User-Agent sortant pour googlevideo.com afin d'éviter le rejet
-  // 403 CDN (YouTube vérifie la concordance entre le client et le User-Agent).
+  // Définit le User-Agent sortant pour googlevideo.com (non utilisé en standard)
   if (msg.type === "vocalis:set-stream-ua") {
-    setupNetRules(msg.ua)
-      .then(() => sendResponse({ ok: true }))
-      .catch(() => sendResponse({ ok: false }));
-    return true;
+    sendResponse({ ok: true });
+    return;
   }
 
   // Téléchargement sécurisé de tranches audio sans restriction CORS
   // (exécuté avec l'origine de l'extension et les host_permissions googlevideo).
   if (msg.type === "vocalis:fetch-range") {
+    let cleanUrl = msg.url;
+    try {
+      const u = new URL(msg.url);
+      u.searchParams.delete("range");
+      u.searchParams.delete("rn");
+      u.searchParams.delete("rbuf");
+      cleanUrl = u.toString();
+    } catch {}
+
     const headers = {};
     if (msg.start != null && msg.end != null) {
       headers["Range"] = `bytes=${msg.start}-${msg.end}`;
     }
-    fetch(msg.url, { headers })
+    fetch(cleanUrl, { headers })
       .then(async (resp) => {
         if (!resp.ok && resp.status !== 206) {
+          // Si le header Range est refusé, tente avec le paramètre ?range= dans l'URL
+          try {
+            const u2 = new URL(cleanUrl);
+            u2.searchParams.set("range", `${msg.start}-${msg.end}`);
+            const resp2 = await fetch(u2.toString());
+            if (resp2.ok || resp2.status === 206) {
+              const buf2 = await resp2.arrayBuffer();
+              const base64 = arrayBufferToBase64(buf2);
+              const cr2 = resp2.headers.get("content-range");
+              let t2 = 0;
+              const m2 = cr2 && cr2.match(/\/(\d+)$/);
+              if (m2) t2 = parseInt(m2[1], 10);
+              else t2 = parseInt(resp2.headers.get("content-length") || "0", 10);
+              sendResponse({ ok: true, base64, total: t2 });
+              return;
+            }
+          } catch {}
           sendResponse({ ok: false, status: resp.status });
           return;
         }

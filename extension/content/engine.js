@@ -285,11 +285,21 @@ self.VocalisEngine = (() => {
       let total = 0;
       let start = 0;
 
-      // Télécharge une tranche : 1er essai direct (page/CORS DNR), 2nd essai via l'extension (service worker)
+      // Nettoie l'URL de tout paramètre range conflictuel
+      let cleanUrl = url;
+      try {
+        const u = new URL(url);
+        u.searchParams.delete("range");
+        u.searchParams.delete("rn");
+        u.searchParams.delete("rbuf");
+        cleanUrl = u.toString();
+      } catch {}
+
+      // Télécharge une tranche : 1er essai direct (page/CORS), 2nd essai via l'extension (service worker)
       const fetchChunk = async (s, e) => {
         const rangeHeader = e != null ? `bytes=${s}-${e}` : `bytes=${s}-`;
         try {
-          const resp = await fetch(url, {
+          const resp = await fetch(cleanUrl, {
             headers: { Range: rangeHeader },
             signal: AbortSignal.timeout(10000),
           });
@@ -309,7 +319,7 @@ self.VocalisEngine = (() => {
         // Repli service worker (100 % hors CORS, permissions d'extension)
         const bgRes = await new Promise((resolve) => {
           chrome.runtime.sendMessage(
-            { type: "vocalis:fetch-range", url, start: s, end: e },
+            { type: "vocalis:fetch-range", url: cleanUrl, start: s, end: e },
             (res) => resolve(res || { ok: false })
           );
         });
@@ -319,7 +329,8 @@ self.VocalisEngine = (() => {
           return { buf, total: bgRes.total || 0 };
         }
 
-        throw new Error(bgRes?.error || `Impossible de télécharger la tranche ${Math.round(s / 1048576)} Mo`);
+        const errDetail = bgRes?.status ? `HTTP ${bgRes.status}` : bgRes?.error || "échec";
+        throw new Error(`tranche ${Math.round(s / 1048576)} Mo (${errDetail})`);
       };
 
       // 1. Première tranche pour connaître la taille totale

@@ -4,6 +4,25 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.5] — 2026-09-20
+
+### Corrigé (Cause racine du chargement infini sur YouTube)
+- **Suppression du forçage de User-Agent sur googlevideo.com** :
+  - La règle dynamique `declarativeNetRequest` (1001) remplaçait le `User-Agent`
+    par un identifiant Android sur toutes les requêtes vers `googlevideo.com` (y compris
+    les flux vidéo `<video>` natifs de YouTube). Les serveurs CDN de YouTube détectaient
+    une incohérence de session (cookies Chrome Desktop vs User-Agent Android) et
+    rejetaient les segments vidéo par des HTTP 403, provoquant un chargement infini
+    du lecteur YouTube avant même toute activation de Vocalis.
+  - Toutes les règles de modification de requêtes ont été définitivement retirées.
+    Le lecteur YouTube fonctionne de nouveau de manière 100 % fluide et native.
+- **Téléchargement audio résilient et sans conflit de Range** :
+  - Nettoyage des paramètres d'URL (`range`, `rn`, `rbuf`) pour éviter tout conflit
+    entre le paramètre d'URL et le header HTTP `Range`.
+  - En cas de rejet du header `Range` par certains CDN, bascule automatique sur le
+    paramètre de requête direct `?range=start-end`.
+  - Diagnostics détaillés : affichage du code HTTP exact en cas d'erreur de tranche.
+
 ## [0.5.4] — 2026-09-20
 
 ### Corrigé (Cause racine du blocage à 1 Mo)
