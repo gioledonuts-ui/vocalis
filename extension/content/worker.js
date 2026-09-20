@@ -23,7 +23,10 @@ import * as ort from "../lib/ort/ort.webgpu.min.mjs";
 import { DemucsProcessor } from "../lib/demucs-web/processor.js";
 import "../content/streamer.js"; // expose self.VocalisStreamer
 
-ort.env.wasm.wasmPaths = new URL("../lib/ort/", import.meta.url).href;
+ort.env.wasm.wasmPaths = {
+  mjs: new URL("../lib/ort/ort-wasm-simd-threaded.jsep.mjs", import.meta.url).href,
+  wasm: new URL("../lib/ort/ort-wasm-simd-threaded.jsep.wasm", import.meta.url).href,
+};
 const cores = typeof navigator !== "undefined" && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4;
 ort.env.wasm.numThreads = Math.min(8, cores);
 ort.env.wasm.simd = true;
@@ -116,7 +119,8 @@ async function downloadModel() {
 
 let processor = null;
 let doneCount = 0;
-let backend = null;
+let backend = "webgpu";
+let adapterInfo = null;
 let firstSep = true;
 let readyPromise = null;
 
@@ -156,7 +160,6 @@ async function doEnsureReady() {
   log("modèle chargé depuis : " + source + " (" + Math.round(buf.byteLength / 1048576) + " Mo)");
 
   const t0 = performance.now();
-  let adapterInfo = null;
   let useWebGPU = false;
 
   // 1. Détection adaptateur WebGPU (haute performance, discret / NVIDIA RTX)
@@ -186,13 +189,7 @@ async function doEnsureReady() {
       processor = new DemucsProcessor({
         ort,
         sessionOptions: {
-          executionProviders: [
-            {
-              name: "webgpu",
-              deviceType: "gpu",
-              powerPreference: "high-performance",
-            },
-          ],
+          executionProviders: ["webgpu", "wasm"],
           graphOptimizationLevel: "all",
           enableCpuMemArena: true,
           enableMemPattern: true,
@@ -328,6 +325,8 @@ self.onmessage = async (e) => {
       post({
         type: "done",
         index: msg.index,
+        left: res.vocals.left.buffer,
+        right: res.vocals.right.buffer,
         leftB64: leftResB64,
         rightB64: rightResB64,
         backend,

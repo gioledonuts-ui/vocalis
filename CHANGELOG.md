@@ -4,6 +4,18 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.14] — 2026-09-20
+
+### Corrigé (WebGPU JSEP initialisation & compatibilité Studio)
+- **Correction du chargement WebGPU JSEP (`webgpuInit is not a function`)** :
+  - Restauration de la configuration explicite `ort.env.wasm.wasmPaths` pointant sur `ort-wasm-simd-threaded.jsep.mjs` et `ort-wasm-simd-threaded.jsep.wasm`. L'affectation d'un dossier racine provoquait le chargement du binaire asyncify non-JSEP (dépourvu de `webgpuInit`).
+  - WebGPU s'initialise désormais parfaitement sur le GPU NVIDIA RTX (architecture Lovelace).
+- **Correction de la portée de `adapterInfo` (`adapterInfo is not defined`)** :
+  - Déclaration de `adapterInfo` au niveau du module du worker pour éviter toute erreur de référence lors de l'émission du message `ready`.
+- **Compatibilité bidirectionnelle Worker / Studio (`msg.left` + `msg.leftB64`)** :
+  - Le worker renvoie simultanément les tampons bruts `ArrayBuffer` (`msg.left`, `msg.right`) et les chaînes `base64` (`msg.leftB64`, `msg.rightB64`), assurant un fonctionnement direct dans Vocalis Studio et à travers l'IPC de l'extension.
+  - Vocalis Studio adopte également les blocs de 7,8 s pour maximiser la vitesse de traitement (1 inférence par bloc).
+
 ## [0.5.13] — 2026-09-20
 
 ### Optimisé (Accélération IA majeure : WebGPU forcé, 75 % d'iSTFT éliminés, alignement natif des blocs)

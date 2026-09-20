@@ -155,6 +155,16 @@ async function toStereo44100(decoded) {
   };
 }
 
+function base64ToArrayBuffer(base64) {
+  const binary = atob(base64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
 /* ---------------- Encodeur WAV 16-bit PCM ---------------- */
 
 function audioBufferToWav(left, right, sampleRate) {
@@ -225,8 +235,8 @@ startBtn.addEventListener("click", async () => {
     const { left, right, duration } = await toStereo44100(rawDecoded);
     log(`Audio prêt : ${formatSec(duration)} (${left.length} échantillons à 44,1 kHz)`);
 
-    const SEG_S = 10;
-    const SEG_SAMPLES = SEG_S * 44100;
+    const SEG_S = 7.8;
+    const SEG_SAMPLES = Math.round(SEG_S * 44100);
     const totalSamples = left.length;
     const nSegments = Math.ceil(totalSamples / SEG_SAMPLES);
 
@@ -248,7 +258,7 @@ startBtn.addEventListener("click", async () => {
       const msg = e.data;
       if (msg.type === "log") {
         log(msg.msg);
-        if (msg.msg.includes("backend :")) {
+        if (msg.msg.includes("backend :") || msg.msg.includes("WebGPU") || msg.msg.includes("Mode CPU")) {
           progressSubtext.textContent = msg.msg;
         }
       } else if (msg.type === "model-download") {
@@ -259,15 +269,25 @@ startBtn.addEventListener("click", async () => {
           : `Téléchargement du modèle : ${msg.pct} %`;
       } else if (msg.type === "ready") {
         modelReady = true;
-        log(`Modèle IA prêt — début de la séparation (${nSegments} blocs de 10 s)`);
+        log(`Modèle IA prêt — début de la séparation (${nSegments} blocs de 7,8 s)`);
         sendNextSegment();
       } else if (msg.type === "done") {
         const segIdx = msg.index;
         const start = segIdx * SEG_SAMPLES;
         const actualLength = Math.min(SEG_SAMPLES, totalSamples - start);
 
-        const vL = new Float32Array(msg.left).subarray(0, actualLength);
-        const vR = new Float32Array(msg.right).subarray(0, actualLength);
+        let leftBuf = msg.left;
+        let rightBuf = msg.right;
+        if (!leftBuf && msg.leftB64) leftBuf = base64ToArrayBuffer(msg.leftB64);
+        if (!rightBuf && msg.rightB64) rightBuf = base64ToArrayBuffer(msg.rightB64);
+
+        if (!leftBuf || !rightBuf) {
+          log(`Avertissement : bloc ${segIdx + 1} retourné sans tampon audio`);
+          return;
+        }
+
+        const vL = new Float32Array(leftBuf).subarray(0, actualLength);
+        const vR = new Float32Array(rightBuf).subarray(0, actualLength);
         outVocalL.set(vL, start);
         outVocalR.set(vR, start);
 

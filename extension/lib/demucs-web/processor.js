@@ -227,9 +227,10 @@ export class DemucsProcessor {
       enableMemPattern: true
     };
 
-    const finalOptions = Object.keys(this.sessionOptions).length
-      ? this.sessionOptions
-      : defaultSessionOptions;
+    const finalOptions = {
+      ...defaultSessionOptions,
+      ...this.sessionOptions
+    };
 
     this.session = await this.ort.InferenceSession.create(modelBuffer, finalOptions);
 
