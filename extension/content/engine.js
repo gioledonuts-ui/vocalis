@@ -267,81 +267,91 @@ self.VocalisEngine = (() => {
           .catch(() => {});
       }
 
-      if (incrOk) {
-        this.mode = "incr";
-        this.incrFmt = src.m4a;
-        this.phase("download", 0);
-        this._startStream(0);
-        await new Promise((res) => { this.startResolve = res; });
-        if (this.aborted || this.fatal) return;
-      }
-      if (this.mode === "legacy-pending" || (!incrOk && src.best)) {
-        this.mode = "legacy";
-        await this.startLegacy(src.best);
-        if (this.aborted) return;
-      }
+      this.mode = "legacy";
+      await this.startPipelineAudio(src.best);
+      if (this.aborted || this.fatal) return;
 
       if (this.started) this.hooks.onReady && this.hooks.onReady(this.duration);
     }
 
-    /* ---------------- Chemin incrémental ---------------- */
+    /* ---------------- Téléchargement complet résilient ---------------- */
 
-    _startStream(fromTime) {
-      this.worker.postMessage({
-        type: this.streamStarted ? "stream-restart" : "stream",
-        url: this.incrFmt.url,
-        ua: this.streamUA,
-        fromTime,
-        skip: [...this.processed],
-      });
-      this.streamStarted = true;
+    async downloadFullAudio(url) {
+      // 1. Essai direct (rapide si le CDN l'accepte)
+      try {
+        const resp = await fetch(url);
+        if (resp.ok && resp.body) {
+          const total = parseInt(resp.headers.get("content-length") || "0", 10);
+          const reader = resp.body.getReader();
+          const chunks = [];
+          let received = 0;
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (this.aborted) return null;
+            chunks.push(value);
+            received += value.length;
+            if (total) this.phase("download", Math.round((received / total) * 100));
+          }
+          return await new Blob(chunks).arrayBuffer();
+        }
+      } catch {
+        /* Repli sur Range ci-dessous */
+      }
+
+      // 2. Repli tranches Range 1 Mo bornées (accepté par tous les CDN googlevideo)
+      this.hooks.onLog && this.hooks.onLog("téléchargement par tranches bornées de 1 Mo…");
+      const CHUNK_SIZE = 1024 * 1024;
+      let start = 0;
+      let total = 0;
+      const chunks = [];
+      let received = 0;
+
+      const firstResp = await fetch(url, { headers: { Range: `bytes=0-${CHUNK_SIZE - 1}` } });
+      if (!firstResp.ok && firstResp.status !== 206) {
+        throw new Error("HTTP " + firstResp.status);
+      }
+      const cr = firstResp.headers.get("content-range");
+      const m = cr && cr.match(/\/(\d+)$/);
+      if (m) total = parseInt(m[1], 10);
+      const firstBuf = await firstResp.arrayBuffer();
+      chunks.push(new Uint8Array(firstBuf));
+      received += firstBuf.byteLength;
+      start = CHUNK_SIZE;
+      if (total) this.phase("download", Math.round((received / total) * 100));
+
+      while (start < total) {
+        if (this.aborted) return null;
+        const end = Math.min(start + CHUNK_SIZE - 1, total - 1);
+        const r = await fetch(url, { headers: { Range: `bytes=${start}-${end}` } });
+        if (!r.ok && r.status !== 206) throw new Error("HTTP " + r.status);
+        const b = await r.arrayBuffer();
+        chunks.push(new Uint8Array(b));
+        received += b.byteLength;
+        start = end + 1;
+        if (total) this.phase("download", Math.round((received / total) * 100));
+      }
+
+      const combined = new Uint8Array(received);
+      let off = 0;
+      for (const c of chunks) {
+        combined.set(c, off);
+        off += c.byteLength;
+      }
+      return combined.buffer;
     }
 
-    _fallback(reason) {
-      if (this.started || this.mode !== "incr") return;
-      this.hooks.onLog &&
-        this.hooks.onLog("bascule mode complet (" + (reason || "flux fragmenté en échec") + ")");
-      this.mode = "legacy-pending";
-      this.worker.postMessage({ type: "stream-stop" });
-      this.hooks.onNotice &&
-        this.hooks.onNotice("Flux fragmenté indisponible (" + (reason || "erreur") + ") → bascule en téléchargement complet.");
-      const r = this.startResolve;
-      this.startResolve = null;
-      r && r(); // start() enchaînera sur startLegacy
-    }
-
-    /* ---------------- Chemin legacy (v0.3) ---------------- */
-
-    async startLegacy(fmt) {
-      this.mode = "legacy";
+    async startPipelineAudio(fmt) {
       this.phase("download", 0);
       let arrayBuf;
       try {
-        let resp = await fetch(fmt.url);
-        if (!resp.ok && resp.status === 403) {
-          this.hooks.onLog &&
-            this.hooks.onLog("legacy : fetch direct 403, tentative par tranches Range…");
-          resp = await fetch(fmt.url, { headers: { Range: "bytes=0-1048575" } });
-        }
-        if (!resp.ok || !resp.body) throw new Error("HTTP " + resp.status);
-        const total = parseInt(resp.headers.get("content-length") || "0", 10);
-        const reader = resp.body.getReader();
-        const chunks = [];
-        let received = 0;
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (this.aborted) return;
-          chunks.push(value);
-          received += value.length;
-          if (total) this.phase("download", Math.round((received / total) * 100), { received, total });
-        }
-        arrayBuf = await new Blob(chunks).arrayBuffer();
+        arrayBuf = await this.downloadFullAudio(fmt.url);
+        if (!arrayBuf || this.aborted) return;
       } catch (e) {
         if (this.aborted) return;
         this.fatal = true;
         this.hooks.onLog &&
-          this.hooks.onLog("ERREUR téléchargement legacy : " + (e?.message || e));
+          this.hooks.onLog("ERREUR téléchargement : " + (e?.message || e));
         this.hooks.onError &&
           this.hooks.onError("Téléchargement de l'audio impossible (" + (e?.message || e) + ").");
         return;
@@ -353,8 +363,9 @@ self.VocalisEngine = (() => {
       const probe = new AudioContext();
       try {
         decoded = await probe.decodeAudioData(arrayBuf);
-      } catch {
-        this.hooks.onError && this.hooks.onError("Décodage de l'audio impossible.");
+      } catch (e) {
+        this.hooks.onError &&
+          this.hooks.onError("Décodage de l'audio impossible (" + (e?.message || e) + ").");
         return;
       } finally {
         probe.close();

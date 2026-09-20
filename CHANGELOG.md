@@ -4,6 +4,24 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.1] — 2026-09-19
+
+### Accélération majeure (multi-threading WASM)
+- Activation de l'isolation cross-origin (`cross_origin_embedder_policy: require-corp`,
+  `cross_origin_opener_policy: same-origin`) autorisant `SharedArrayBuffer` dans
+  l'extension Chrome.
+- Le modèle HTDemucs exploite désormais jusqu'à 8 cœurs CPU en parallèle
+  (`ort.env.wasm.numThreads = Math.min(8, cores)`) au lieu d'un seul cœur,
+  réduisant le temps de traitement de 4 heures à ~30 minutes pour 2h d'audio,
+  et permettant la lecture YouTube après seulement 2 à 3 secondes d'attente.
+
+### Corrigé
+- YouTube : alignement du pipeline YouTube sur le pipeline du Studio (qui a
+  fait ses preuves sur le fichier de 2h). Téléchargement résilient du fichier audio
+  complet (direct ou par tranches Range 1 Mo), décodage natif Web Audio API
+  (éliminant les bugs de démultiplexage MP4Box), et démarrage de la lecture dès
+  que le premier bloc de 10 s est séparé.
+
 ## [0.5.0] — 2026-09-19
 
 ### Ajouté

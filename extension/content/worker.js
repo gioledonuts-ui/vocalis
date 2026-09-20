@@ -27,7 +27,8 @@ ort.env.wasm.wasmPaths = {
   mjs: new URL("../lib/ort/ort-wasm-simd-threaded.jsep.mjs", import.meta.url).href,
   wasm: new URL("../lib/ort/ort-wasm-simd-threaded.jsep.wasm", import.meta.url).href,
 };
-ort.env.wasm.numThreads = 1;
+const cores = typeof navigator !== "undefined" && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4;
+ort.env.wasm.numThreads = Math.min(8, cores);
 ort.env.logLevel = "error";
 
 const MODEL_URL =
