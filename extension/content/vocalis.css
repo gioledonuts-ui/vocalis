@@ -158,3 +158,81 @@
   opacity: 0.9;
   box-shadow: 0 0 6px rgba(139, 92, 246, 0.7);
 }
+
+/* ------------------------------------------------------------
+   Bouton Vocalis dans les contrôles du lecteur YouTube (.ytp-right-controls)
+   ------------------------------------------------------------ */
+.ytp-button.vocalis-player-btn {
+  position: relative;
+  width: 46px;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  vertical-align: top;
+  text-align: center;
+  color: #eee;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.ytp-button.vocalis-player-btn svg {
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.ytp-button.vocalis-player-btn:hover {
+  color: #fff;
+  transform: scale(1.08);
+}
+
+/* État actif : couleur violette éclatante + point indicateur actif */
+.ytp-button.vocalis-player-btn.active {
+  color: #a78bfa;
+}
+
+.ytp-button.vocalis-player-btn.active rect {
+  fill: #a78bfa;
+  filter: drop-shadow(0 0 4px rgba(167, 139, 250, 0.7));
+}
+
+.ytp-button.vocalis-player-btn.active::after {
+  content: "";
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #a78bfa;
+  box-shadow: 0 0 6px #a78bfa;
+}
+
+/* État de chargement / préparation : pulsation rythmée des barres */
+.ytp-button.vocalis-player-btn.loading rect {
+  fill: #38bdf8;
+  animation: vocalis-btn-bounce 0.9s ease-in-out infinite alternate;
+}
+.ytp-button.vocalis-player-btn.loading rect:nth-child(1) { animation-delay: 0s; }
+.ytp-button.vocalis-player-btn.loading rect:nth-child(2) { animation-delay: 0.15s; }
+.ytp-button.vocalis-player-btn.loading rect:nth-child(3) { animation-delay: 0.3s; }
+.ytp-button.vocalis-player-btn.loading rect:nth-child(4) { animation-delay: 0.45s; }
+.ytp-button.vocalis-player-btn.loading rect:nth-child(5) { animation-delay: 0.6s; }
+
+@keyframes vocalis-btn-bounce {
+  0% { transform: scaleY(0.4); transform-origin: center; }
+  100% { transform: scaleY(1.1); transform-origin: center; }
+}
+
+/* État d'erreur */
+.ytp-button.vocalis-player-btn.error {
+  color: #f87171;
+}
+.ytp-button.vocalis-player-btn.error rect {
+  fill: #f87171;
+}

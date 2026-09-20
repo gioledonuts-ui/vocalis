@@ -23,14 +23,25 @@
     window.postMessage({ source: "vocalis-bridge", type, payload }, "*");
 
   function playerResponse() {
-    const player = document.getElementById("movie_player");
     try {
-      return player && typeof player.getPlayerResponse === "function"
-        ? player.getPlayerResponse()
-        : null;
-    } catch {
-      return null;
-    }
+      const player = document.getElementById("movie_player");
+      if (player && typeof player.getPlayerResponse === "function") {
+        const pr = player.getPlayerResponse();
+        if (pr && pr.videoDetails) return pr;
+      }
+    } catch {}
+    try {
+      if (window.ytInitialPlayerResponse && window.ytInitialPlayerResponse.videoDetails) {
+        return window.ytInitialPlayerResponse;
+      }
+    } catch {}
+    try {
+      const flexy = document.querySelector("ytd-watch-flexy, ytd-watch-grid");
+      if (flexy && flexy.playerData && flexy.playerData.videoDetails) {
+        return flexy.playerData;
+      }
+    } catch {}
+    return null;
   }
 
   /* Requêtes du script de contenu */
@@ -74,8 +85,20 @@
 
   /* Détection de changement de vidéo (navigation SPA) */
   let lastVideoId = null;
+  function getVideoId() {
+    const fromPr = playerResponse()?.videoDetails?.videoId;
+    if (fromPr) return fromPr;
+    const urlParams = new URLSearchParams(window.location.search);
+    const fromUrl = urlParams.get("v");
+    if (fromUrl) return fromUrl;
+    if (window.location.pathname.startsWith("/shorts/")) {
+      return window.location.pathname.split("/")[2] || null;
+    }
+    return null;
+  }
+
   function checkVideo() {
-    const id = playerResponse()?.videoDetails?.videoId || null;
+    const id = getVideoId();
     if (id === lastVideoId) return;
     const from = lastVideoId;
     lastVideoId = id;

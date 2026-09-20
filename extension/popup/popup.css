@@ -98,6 +98,35 @@ main { padding: 16px; }
 }
 .progress-label { margin-top: 6px; font-size: 11px; color: var(--muted); }
 
+.sync-warning {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: #2b1725;
+  border: 1px solid #7f1d4f;
+  border-radius: 8px;
+  color: #fbcfe8;
+  font-size: 11.5px;
+  line-height: 1.4;
+  text-align: center;
+}
+.sync-warning.hidden { display: none; }
+.reload-tab-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #be185d;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.reload-tab-btn:hover {
+  background: #db2777;
+}
+
 footer {
   display: flex;
   align-items: center;

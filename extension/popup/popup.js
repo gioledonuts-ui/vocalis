@@ -11,6 +11,8 @@ const versionEl = document.getElementById("version");
 const progressZone = document.getElementById("progress-zone");
 const progressFill = document.getElementById("progress-fill");
 const progressLabel = document.getElementById("progress-label");
+const syncWarning = document.getElementById("sync-warning");
+const reloadTabBtn = document.getElementById("reload-tab-btn");
 
 const PHASES = {
   response: "Lecture du lecteur YouTube…",
@@ -48,8 +50,31 @@ async function refresh() {
     statusEl.textContent =
       "Vocalis s'utilise sur une page YouTube. Ouvre une vidéo puis reviens ici.";
     progressZone.classList.add("hidden");
+    syncWarning?.classList.add("hidden");
     return;
   }
+
+  // Vérifie si le script de contenu répond dans l'onglet
+  let st = null;
+  let connectionFailed = false;
+  try {
+    st = await chrome.tabs.sendMessage(tab.id, { type: "vocalis:get-status" });
+  } catch {
+    connectionFailed = true;
+  }
+
+  if (connectionFailed) {
+    // Si le content script ne répond pas, la page a été ouverte avant la mise à jour
+    syncWarning?.classList.remove("hidden");
+    statusEl.textContent = "Page non synchronisée suite à la mise à jour.";
+    btn.disabled = false;
+    btn.classList.remove("on");
+    btn.textContent = "🔄 Recharger la page (F5)";
+    progressZone.classList.add("hidden");
+    return;
+  }
+
+  syncWarning?.classList.add("hidden");
 
   const { enabledTabs = {} } = await chrome.storage.local.get("enabledTabs");
   const enabled = !!enabledTabs[tab.id];
@@ -60,21 +85,7 @@ async function refresh() {
 
   if (!enabled) {
     statusEl.textContent =
-      "Prêt. Clique pour remplacer le son de la vidéo par sa version sans musique (modèle en v0.3).";
-    progressZone.classList.add("hidden");
-    return;
-  }
-
-  // Statut en direct du pipeline côté page.
-  let st = null;
-  try {
-    st = await chrome.tabs.sendMessage(tab.id, { type: "vocalis:get-status" });
-  } catch {
-    /* page pas encore prête */
-  }
-
-  if (!st) {
-    statusEl.textContent = "Vocalis actif — en attente du lecteur vidéo…";
+      "Prêt. Clique sur le bouton Vocalis dans la barre du lecteur YouTube ou ici pour lancer.";
     progressZone.classList.add("hidden");
     return;
   }
@@ -120,6 +131,19 @@ btn.addEventListener("click", async () => {
   const tab = await currentTab();
   if (!isYouTubeUrl(tab?.url)) return;
 
+  // Si le content script est déconnecté, un clic recharge immédiatement la page
+  let responsive = false;
+  try {
+    const res = await chrome.tabs.sendMessage(tab.id, { type: "vocalis:get-status" });
+    if (res) responsive = true;
+  } catch {}
+
+  if (!responsive) {
+    chrome.tabs.reload(tab.id);
+    window.close();
+    return;
+  }
+
   const { enabledTabs = {} } = await chrome.storage.local.get("enabledTabs");
   const nowEnabled = !enabledTabs[tab.id];
 
@@ -134,6 +158,16 @@ btn.addEventListener("click", async () => {
 
   refresh();
 });
+
+if (reloadTabBtn) {
+  reloadTabBtn.addEventListener("click", async () => {
+    const tab = await currentTab();
+    if (tab?.id) {
+      chrome.tabs.reload(tab.id);
+      window.close();
+    }
+  });
+}
 
 const openStudioBtn = document.getElementById("open-studio");
 if (openStudioBtn) {

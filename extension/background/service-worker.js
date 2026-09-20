@@ -34,9 +34,33 @@ async function ensureOffscreen() {
   await offscreenCreating;
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
   // Nettoie les onglets activés d'une précédente session (les tabId ne survivent pas).
   chrome.storage.local.set({ enabledTabs: {} });
+
+  // Ré-injection automatique sur les onglets YouTube ouverts afin que l'utilisateur
+  // n'ait pas besoin de recharger la page après une mise à jour de l'extension.
+  try {
+    const tabs = await chrome.tabs.query({ url: "*://*.youtube.com/*" });
+    for (const tab of tabs) {
+      if (!tab.id) continue;
+      chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: [
+          "content/idb.js",
+          "content/innertube.js",
+          "content/cipher.js",
+          "content/workerproxy.js",
+          "content/engine.js",
+          "content/content.js",
+        ],
+      }).catch(() => {});
+      chrome.scripting.insertCSS({
+        target: { tabId: tab.id },
+        files: ["content/vocalis.css"],
+      }).catch(() => {});
+    }
+  } catch {}
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -108,6 +132,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
     });
     chrome.action.setBadgeText({ tabId, text: "" });
+    return;
+  }
+
+  // Synchronisation depuis le bouton du lecteur vidéo (.ytp-right-controls)
+  if (msg.type === "vocalis:set-tab-enabled" && sender.tab?.id != null) {
+    const tabId = sender.tab.id;
+    chrome.storage.local.get({ enabledTabs: {} }).then(({ enabledTabs }) => {
+      if (msg.enabled) enabledTabs[tabId] = true;
+      else delete enabledTabs[tabId];
+      chrome.storage.local.set({ enabledTabs });
+    });
+    chrome.action.setBadgeText({ tabId, text: msg.enabled ? "ON" : "" });
+    if (msg.enabled) {
+      chrome.action.setBadgeBackgroundColor({ tabId, color: BADGE_COLOR });
+    }
     return;
   }
 

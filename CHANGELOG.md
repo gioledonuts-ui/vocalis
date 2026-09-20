@@ -4,6 +4,28 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.2] — 2026-09-20
+
+### Ajouté
+- **Bouton natif dans le lecteur YouTube** : ajout direct de l'icône Vocalis
+  dans la barre de contrôle du lecteur YouTube (`.ytp-right-controls`), juste
+  à côté des boutons sous-titres et paramètres.
+  - Clic direct pour activer/désactiver Vocalis sans avoir à ouvrir le popup.
+  - État actif en violet éclatant néon avec point lumineux.
+  - Animation d'égaliseur audio dynamique pendant la préparation des voix.
+  - Raccourci clavier universel : **Alt+V** pour basculer Vocalis en plein écran
+    ou en mode cinéma.
+
+### Corrigé
+- **« En attente du lecteur vidéo »** : après une mise à jour de l'extension
+  ou un rechargement dans `chrome://extensions`, les onglets YouTube déjà ouverts
+  perdaient la liaison.
+  - Ré-injection automatique des scripts sur tous les onglets YouTube ouverts
+    dès la mise à jour via `chrome.scripting`.
+  - Détection claire dans le popup avec bouton 1-clic « 🔄 Recharger la page (F5) ».
+  - Détection résiliente de l'identifiant vidéo (URL directe `?v=` et `/shorts/`
+    en secours du `playerResponse`).
+
 ## [0.5.1] — 2026-09-19
 
 ### Accélération majeure (multi-threading WASM)

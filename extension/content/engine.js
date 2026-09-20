@@ -120,23 +120,29 @@ self.VocalisEngine = (() => {
       return audio[0];
     }
 
-    async resolveAudioSource(pr) {
+    async resolveAudioSource(pr, videoId) {
       const log = (m) => this.hooks.onLog && this.hooks.onLog(m);
-      const fmts = pr?.streamingData?.adaptiveFormats || [];
-      const pageAudio = fmts.filter((f) => (f.mimeType || "").startsWith("audio/"));
-      const withUrl = pageAudio.filter((f) => f.url);
-      log("flux page : " + pageAudio.length + " formats audio, " +
-          withUrl.length + " avec URL directe");
+      const out = { m4a: null, best: null, via: "page" };
 
-      const out = { m4a: this.pickAudio(pr, "audio/mp4"), best: this.pickAudio(pr, "audio/"), via: "page" };
-      if (out.best) return out;
+      if (pr) {
+        const fmts = pr?.streamingData?.adaptiveFormats || [];
+        const pageAudio = fmts.filter((f) => (f.mimeType || "").startsWith("audio/"));
+        const withUrl = pageAudio.filter((f) => f.url);
+        log("flux page : " + pageAudio.length + " formats audio, " +
+            withUrl.length + " avec URL directe");
 
-      log("pas d'URL directe → test de l'API Innertube (clients TV/Android)…");
+        out.m4a = this.pickAudio(pr, "audio/mp4");
+        out.best = this.pickAudio(pr, "audio/");
+        if (out.best) return out;
+      }
+
+      log("recherche du flux via l'API Innertube (VisionOS / Android)…");
       const apiKey = this.extras?.apiKey || "AIzaSyAO_FJ2SlqU8Q4STEHLNlTpqUcavnZbsC8";
+      const targetId = videoId || pr?.videoDetails?.videoId;
       let it = null;
       try {
         it = await withTimeout(
-          VocalisInnertube.query(pr.videoDetails.videoId, apiKey, log), 20000, "innertube"
+          VocalisInnertube.query(targetId, apiKey, log), 20000, "innertube"
         );
       } catch (e) {
         log("innertube : échec global (" + (e?.message || e) + ")");
@@ -152,7 +158,9 @@ self.VocalisEngine = (() => {
       }
 
       const jsUrl = this.extras?.playerJsUrl;
-      if (jsUrl) {
+      const fmts = pr?.streamingData?.adaptiveFormats || [];
+      const pageAudio = fmts.filter((f) => (f.mimeType || "").startsWith("audio/"));
+      if (jsUrl && pageAudio.length) {
         // base.js principal, puis variante ES5 (syntaxe classique que notre
         // mini-bundler comprend à coup sûr) si le premier ne résout rien.
         const variants = [jsUrl];
@@ -163,7 +171,7 @@ self.VocalisEngine = (() => {
           if (solved) return solved;
         }
       } else {
-        log("base.js introuvable dans la page → déchiffrement impossible");
+        log("base.js introuvable ou aucun format à déchiffrer");
       }
       return out;
     }
@@ -211,25 +219,30 @@ self.VocalisEngine = (() => {
       if (this.aborted) return;
       const pr = payload?.pr;
       this.extras = payload || {};
-      this.hooks.onLog && this.hooks.onLog(pr?.videoDetails?.videoId
-        ? "playerResponse OK (videoId " + pr.videoDetails.videoId + ", " +
-          Math.round(parseFloat(pr.videoDetails.lengthSeconds) || 0) + " s)"
-        : "playerResponse VIDE");
-      if (!pr?.videoDetails?.videoId) {
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlVideoId = urlParams.get("v") || (window.location.pathname.startsWith("/shorts/") ? window.location.pathname.split("/")[2] : null);
+      const videoId = pr?.videoDetails?.videoId || urlVideoId;
+
+      this.hooks.onLog && this.hooks.onLog(videoId
+        ? "vidéo détectée : " + videoId + (pr ? " (playerResponse OK)" : " (via URL)")
+        : "playerResponse VIDE et aucune vidéo dans l'URL");
+
+      if (!videoId) {
         this.hooks.onError && this.hooks.onError("Impossible de lire le lecteur YouTube.");
         return;
       }
-      if (pr.videoDetails.isLive) {
+      if (pr?.videoDetails?.isLive) {
         this.hooks.onError && this.hooks.onError("Les directs ne sont pas encore gérés.");
         return;
       }
-      this.duration = parseFloat(pr.videoDetails.lengthSeconds) || 0;
+      this.duration = parseFloat(pr?.videoDetails?.lengthSeconds) || this.video?.duration || 0;
       this.nChunks = Math.max(1, Math.ceil(this.duration / CHUNK));
       this.cacheEnabled = this.nChunks * CHUNK * SR * 2 * 2 <= CACHE_CAP;
 
       let src;
       try {
-        src = await this.resolveAudioSource(pr);
+        src = await this.resolveAudioSource(pr, videoId);
       } catch (e) {
         this.hooks.onLog && this.hooks.onLog("ERREUR recherche de flux : " + (e?.message || e));
         this.hooks.onError &&
@@ -237,8 +250,7 @@ self.VocalisEngine = (() => {
         return;
       }
       this.via = src.via;
-      this.hooks.onLog && this.hooks.onLog("flux audio obtenu via : " + src.via +
-        (src.m4a ? " (m4a OK → mode fragmenté)" : " (pas de m4a → mode complet)"));
+      this.hooks.onLog && this.hooks.onLog("flux audio obtenu via : " + src.via);
       if (!src.best) {
         this.hooks.onError &&
           this.hooks.onError(
@@ -247,7 +259,7 @@ self.VocalisEngine = (() => {
           );
         return;
       }
-      this.videoId = pr.videoDetails.videoId;
+      this.videoId = videoId;
 
       /* Worker IA : créé maintenant, initialisé EN PARALLÈLE du flux */
       this.phase("model");

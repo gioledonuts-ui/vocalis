@@ -45,6 +45,81 @@
     setEnabled(false);
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Bouton intégré dans le lecteur YouTube (.ytp-right-controls)       */
+  /* ------------------------------------------------------------------ */
+
+  function insertPlayerButton() {
+    const rightControls = document.querySelector(".ytp-right-controls");
+    if (!rightControls) return;
+
+    let btn = document.getElementById("vocalis-player-btn");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.id = "vocalis-player-btn";
+      btn.className = "ytp-button vocalis-player-btn";
+      btn.setAttribute("aria-label", "Vocalis — Retirer la musique de fond (Alt+V)");
+      btn.innerHTML = `
+        <svg viewBox="0 0 36 36" width="36" height="36">
+          <rect x="7" y="13" width="3" height="10" rx="1.5" fill="currentColor"/>
+          <rect x="12" y="9" width="3" height="18" rx="1.5" fill="currentColor"/>
+          <rect x="17" y="6" width="3" height="24" rx="1.5" fill="currentColor"/>
+          <rect x="22" y="11" width="3" height="14" rx="1.5" fill="currentColor"/>
+          <rect x="27" y="8" width="3" height="20" rx="1.5" fill="currentColor"/>
+        </svg>
+      `;
+
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setEnabled(!state.enabled);
+      });
+
+      // Insertion dans la barre de contrôle :
+      // Avant les sous-titres ou paramètres si présents, sinon au tout début
+      const anchor =
+        rightControls.querySelector(".ytp-subtitles-button") ||
+        rightControls.querySelector(".ytp-settings-button") ||
+        rightControls.firstChild;
+
+      if (anchor) {
+        rightControls.insertBefore(btn, anchor);
+      } else {
+        rightControls.appendChild(btn);
+      }
+    }
+
+    updatePlayerButton();
+  }
+
+  function updatePlayerButton() {
+    const btn = document.getElementById("vocalis-player-btn");
+    if (!btn) return;
+
+    const isActive = state.enabled && !!state.engine?.active;
+    const isPreparing = state.enabled && !state.engine?.active && !state.status.notice;
+    const isError = state.enabled && !!state.status.notice && !state.engine?.started;
+
+    btn.classList.toggle("active", isActive);
+    btn.classList.toggle("loading", isPreparing);
+    btn.classList.toggle("error", isError);
+
+    if (isActive) {
+      btn.title = "Vocalis : Actif (musique retirée, voix seules) — Cliquer pour couper (Alt+V)";
+      btn.setAttribute("aria-label", "Vocalis : Actif");
+    } else if (isPreparing) {
+      const p = state.status.pct != null ? ` (${state.status.pct} %)` : "";
+      btn.title = `Vocalis : Préparation en cours${p}… — Cliquer pour annuler (Alt+V)`;
+      btn.setAttribute("aria-label", "Vocalis : Préparation en cours");
+    } else if (isError) {
+      btn.title = `Vocalis : ${state.status.notice || "Erreur"} — Cliquer pour réessayer (Alt+V)`;
+      btn.setAttribute("aria-label", "Vocalis : Erreur");
+    } else {
+      btn.title = "Vocalis : Retirer la musique de fond (Alt+V)";
+      btn.setAttribute("aria-label", "Vocalis : Retirer la musique de fond");
+    }
+  }
+
   function showOverlay({ title, subtitle, pct = null, error = false }) {
     let overlay = document.getElementById("vocalis-overlay");
     if (!overlay) {
@@ -135,6 +210,7 @@
     hideOverlay();
     hideBufferBar();
     state.status = { phase: null, pct: null, notice: null };
+    updatePlayerButton();
     if (purge && state.currentVideoId) {
       await VocalisIDB.deleteVideo(state.currentVideoId).catch(() => {});
     }
@@ -159,6 +235,7 @@
       onPhase: (name, pct, info) => {
         state.status.phase = name;
         state.status.pct = pct;
+        updatePlayerButton();
         if (name === "download" && pct != null && info?.seconds != null) {
           if (pct % 20 === 0) logLine("réception audio : " + pct + " % (" + Math.round(info.seconds) + " s)");
         } else if (name === "model" && pct != null && !info?.cached) {
@@ -208,6 +285,7 @@
       },
       onStall: (pct) => {
         state.status.phase = "stall";
+        updatePlayerButton();
         showOverlay({
           title: "Traitement de cette zone…",
           subtitle: `Vidéo traitée à ${pct} % — un instant.`,
@@ -217,22 +295,26 @@
       onStallClear: () => {
         if (state.status.phase === "stall") {
           state.status.phase = null;
+          updatePlayerButton();
           hideOverlay();
         }
       },
       onError: (msg) => {
         state.status.notice = msg;
+        updatePlayerButton();
         if (state.enabled) {
           showOverlay({ title: msg, subtitle: "", error: true, closable: true, pct: null });
         }
       },
       onNotice: (msg) => {
         state.status.notice = msg;
+        updatePlayerButton();
       },
       onReady: (duration) => {
         state.currentVideoId = engine.videoId;
         hideOverlay();
         updateBufferBar(engine.ranges(), duration);
+        updatePlayerButton();
         if (state.enabled) {
           engine.activate();
           if (state.pausedByUs) getVideoElement()?.play().catch(() => {});
@@ -302,6 +384,8 @@
     }
     state.enabled = enabled;
     chrome.runtime.sendMessage({ type: "vocalis:badge", on: enabled }).catch(() => {});
+    chrome.runtime.sendMessage({ type: "vocalis:set-tab-enabled", enabled }).catch(() => {});
+    updatePlayerButton();
     const video = getVideoElement();
 
     if (!enabled) {
@@ -377,4 +461,19 @@
   window.addEventListener("pagehide", () => {
     if (state.currentVideoId) VocalisIDB.deleteVideo(state.currentVideoId).catch(() => {});
   });
+
+  // Raccourci clavier Alt+V pour basculer Vocalis directement depuis YouTube
+  window.addEventListener("keydown", (e) => {
+    if (e.altKey && (e.key === "v" || e.key === "V")) {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea") return;
+      e.preventDefault();
+      setEnabled(!state.enabled);
+    }
+  });
+
+  // Insertion et surveillance du bouton dans la barre de contrôle YouTube
+  insertPlayerButton();
+  setInterval(insertPlayerButton, 1500);
+  window.addEventListener("yt-navigate-finish", insertPlayerButton);
 })();
