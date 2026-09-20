@@ -4,6 +4,21 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.9] — 2026-09-20
+
+### Corrigé (Flux PC 100 % complet et sortie audio WebAudio)
+- **Acquisition 100 % du flux PC Web natif via Innertube WEB** :
+  - Sur le lecteur de bureau, YouTube utilise SABR ce qui masquait les signatures dans le player runtime. Vocalis interroge désormais le client `WEB` de l'API Innertube pour obtenir les formats signés haute définition du PC.
+  - Déchiffrement direct avec l'interpréteur statique (conforme CSP).
+  - Fin du repli Android à 1 Mo (37 %) : la vidéo complète (100 %) est téléchargée et traitée.
+- **Sortie audio garantie (WebAudio)** :
+  - Élimination de la boucle de course entre les événements `play` / `playing` et le watchdog : temporisation (debounce 40 ms) de la planification pour éviter l'annulation prématurée des buffers.
+  - Garantie de l'état `running` de l'`AudioContext` (`await resume()`) avant le calcul temporel de synchronisation.
+  - Seuil de tolérance de dérive (`DRIFT_MAX`) recalibré de 90 ms à 400 ms pour respecter les saccades normales du moteur de rendu vidéo Chrome.
+  - Maintien du volume d'écoute réel via `movie_player.getVolume()` découplé du mute YouTube.
+- **Journalisation en direct** :
+  - Affichage pas à pas de chaque bloc traité par l'IA et de l'activation des flux dans les logs de débogage.
+
 ## [0.5.8] — 2026-09-20
 
 ### Corrigé (Cause racine du son original persistant & flux PC natif)

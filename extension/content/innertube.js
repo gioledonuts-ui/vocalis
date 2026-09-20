@@ -120,5 +120,61 @@ self.VocalisInnertube = (() => {
     return null;
   }
 
-  return { query };
+  /**
+   * Interroge l'API Innertube avec le profil WEB (PC standard).
+   * Retourne { formats } contenant les formats adaptatifs signés (signatureCipher)
+   * sans aucune bride de téléchargement ni limitation mobile.
+   */
+  async function queryWeb(videoId, apiKey, onLog) {
+    const log = (m) => onLog && onLog(m);
+    try {
+      const effectiveKey = apiKey || "AIzaSyAO_FJ2SlqU8Q4STEHLNlTpqUcavnZbsC8";
+      const resp = await fetch(
+        "https://www.youtube.com/youtubei/v1/player?key=" +
+          encodeURIComponent(effectiveKey) +
+          "&prettyPrint=false",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(8000),
+          body: JSON.stringify({
+            videoId,
+            context: {
+              client: {
+                clientName: "WEB",
+                clientVersion: "2.20240920.01.00",
+                hl: "fr",
+                gl: "FR",
+              },
+            },
+            playbackContext: {
+              contentPlaybackContext: { html5Preference: "HTML5_PREF_WANTS" },
+            },
+          }),
+        }
+      );
+      if (!resp.ok) {
+        log("Innertube WEB : HTTP " + resp.status);
+        return null;
+      }
+      const j = await new Promise((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error("timeout json")), 8000);
+        resp.json().then((v) => { clearTimeout(t); resolve(v); },
+                         (e) => { clearTimeout(t); reject(e); });
+      });
+      if (j?.playabilityStatus?.status !== "OK") {
+        log("Innertube WEB : statut " + (j?.playabilityStatus?.status || "réponse vide"));
+        return null;
+      }
+      const all = j?.streamingData?.adaptiveFormats || [];
+      const audioAll = all.filter((f) => (f.mimeType || "").startsWith("audio/"));
+      log("Innertube WEB : " + audioAll.length + " formats audio reçus");
+      return { formats: audioAll };
+    } catch (e) {
+      log("Innertube WEB : échec (" + (e?.message || e) + ")");
+      return null;
+    }
+  }
+
+  return { query, queryWeb };
 })();

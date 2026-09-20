@@ -355,13 +355,13 @@
         updatePlayerButton();
         if (state.enabled) {
           engine.initAudioContext();
-          engine.activate();
           if (state.pausedByUs) {
             const v = getVideoElement();
             if (v && v.paused) {
               v.play().catch(() => {});
             }
           }
+          engine.activate();
         }
       },
     });

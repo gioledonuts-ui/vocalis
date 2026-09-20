@@ -239,8 +239,13 @@ self.onmessage = async (e) => {
       if (!processor) await ensureReady();
       const left = new Float32Array(msg.left);
       const right = new Float32Array(msg.right);
+      const t0 = performance.now();
       const res = await processor.separate(left, right);
+      const dt = Math.round(performance.now() - t0);
       doneCount++;
+      if (doneCount === 1 || doneCount % 3 === 0) {
+        log("IA : bloc " + (msg.index + 1) + " traité en " + dt + " ms (" + backend + ")");
+      }
       post(
         { type: "done", index: msg.index, left: res.vocals.left.buffer, right: res.vocals.right.buffer },
         [res.vocals.left.buffer, res.vocals.right.buffer]

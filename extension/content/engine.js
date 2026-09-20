@@ -27,7 +27,7 @@ self.VocalisEngine = (() => {
   const SCHEDULE_AHEAD = 90;        // secondes d'audio programmées d'avance
   const MEM_WINDOW = 60;            // blocs gardés en RAM (~30 min)
   const CACHE_CAP = 1_500_000_000;  // plafond IndexedDB par vidéo (~1,5 Go)
-  const DRIFT_MAX = 0.09;           // écart audio/vidéo toléré (s)
+  const DRIFT_MAX = 0.40;           // écart audio/vidéo toléré (s) (400 ms)
 
   /** Borne n'importe quelle promesse : jamais d'attente infinie. */
   function withTimeout(promise, ms, label) {
@@ -149,17 +149,32 @@ self.VocalisEngine = (() => {
         } catch {}
       }
 
-      const ciphers = pageAudio.filter((f) => f.signatureCipher || f.cipher);
+      let ciphers = pageAudio.filter((f) => f.signatureCipher || f.cipher);
+
+      // Si le playerResponse de la page n'a pas de signatureCipher (YouTube SABR desktop),
+      // on demande directement les formats WEB à l'API Innertube avec client WEB (PC natif)
+      const apiKey = this.extras?.apiKey || "AIzaSyAO_FJ2SlqU8Q4STEHLNlTpqUcavnZbsC8";
+      const targetId = videoId || pr?.videoDetails?.videoId;
+
+      if (!ciphers.length && targetId) {
+        log("formats signés absents de la page, interrogation Innertube WEB…");
+        const webData = await VocalisInnertube.queryWeb(targetId, apiKey, log);
+        if (webData && webData.formats && webData.formats.length) {
+          ciphers = webData.formats.filter((f) => f.signatureCipher || f.cipher);
+          log("Innertube WEB : " + ciphers.length + " formats signés obtenus");
+        }
+      }
+
       log("déchiffrement : jsUrl=" + (jsUrl ? "OK" : "aucun") + ", formats chiffrés=" + ciphers.length);
       if (jsUrl && ciphers.length) {
-        log("déchiffrement : analyse des " + ciphers.length + " formats signés…");
+        log("déchiffrement : analyse des " + ciphers.length + " formats signés PC…");
         const variants = [jsUrl];
         const es5 = jsUrl.replace("/player_ias.vflset/", "/player_ias_es5.vflset/");
         if (es5 !== jsUrl) variants.push(es5);
         for (const v of variants) {
           const solved = await this.tryDecipher(v, ciphers, { m4a: null, best: null }, log);
           if (solved && solved.best) {
-            candidates.push({ format: solved.best, via: "déchiffrement", ua: null });
+            candidates.push({ format: solved.best, via: "web-pc", ua: null });
             break;
           }
         }
@@ -171,20 +186,20 @@ self.VocalisEngine = (() => {
         candidates.push({ format: direct, via: "page-direct", ua: null });
       }
 
-      // 3. Recherche Innertube (VisionOS, TVHTML5, Android...)
-      log("recherche de flux via Innertube…");
-      const apiKey = this.extras?.apiKey || "AIzaSyAO_FJ2SlqU8Q4STEHLNlTpqUcavnZbsC8";
-      const targetId = videoId || pr?.videoDetails?.videoId;
-      try {
-        const it = await withTimeout(
-          VocalisInnertube.query(targetId, apiKey, log), 15000, "innertube"
-        );
-        if (it && it.formats && it.formats.length) {
-          const sorted = it.formats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
-          candidates.push({ format: sorted[0], via: it.client, ua: it.userAgent });
+      // 3. Recherche Innertube alternative (repli uniquement si Web PC a échoué)
+      if (!candidates.length) {
+        log("recherche de flux via Innertube (repli mobile)…");
+        try {
+          const it = await withTimeout(
+            VocalisInnertube.query(targetId, apiKey, log), 15000, "innertube"
+          );
+          if (it && it.formats && it.formats.length) {
+            const sorted = it.formats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+            candidates.push({ format: sorted[0], via: it.client, ua: it.userAgent });
+          }
+        } catch (e) {
+          log("innertube : échec (" + (e?.message || e) + ")");
         }
-      } catch (e) {
-        log("innertube : échec (" + (e?.message || e) + ")");
       }
 
       return candidates;
@@ -207,10 +222,10 @@ self.VocalisEngine = (() => {
           const solved = VocalisCipher.solve(baseJs, cipherText);
           if (solved) {
             const withSolved = { ...f, url: solved.url };
-            out.via = "déchiffrement";
+            out.via = "web-pc";
             if ((f.mimeType || "").startsWith("audio/mp4") && !out.m4a) out.m4a = withSolved;
             out.best = out.best || withSolved;
-            log("déchiffrement : URL audio reconstituée (" + label + ")");
+            log("déchiffrement : URL audio PC reconstituée (" + label + ")");
             return out;
           }
         }
@@ -473,7 +488,7 @@ self.VocalisEngine = (() => {
         probe.close();
       }
       if (this.aborted) return;
-      if (!this.duration) {
+      if (!this.duration || decoded.duration < this.duration) {
         this.duration = decoded.duration;
         this.nChunks = Math.max(1, Math.ceil(this.duration / CHUNK));
       }
@@ -618,6 +633,8 @@ self.VocalisEngine = (() => {
         this.phase("prepare", Math.min(100, Math.round((ready / PRELOAD_S) * 100)));
         if (ready >= PRELOAD_S || this.processed.size >= this.nChunks) {
           this.started = true;
+          this.hooks.onLog &&
+            this.hooks.onLog(`pré-chargement terminé (${this.processed.size} blocs = ${ready} s), activation du son…`);
           const r = this.startResolve;
           this.startResolve = null;
           r && r();
@@ -703,26 +720,50 @@ self.VocalisEngine = (() => {
       }
       if (!this.gain && this.ctx) {
         this.gain = this.ctx.createGain();
-        this.gain.gain.value = 1.0;
+        let targetVol = 1.0;
+        try {
+          const p = document.getElementById("movie_player");
+          if (p && typeof p.getVolume === "function") {
+            const v = p.getVolume();
+            if (typeof v === "number" && v > 0) targetVol = v / 100;
+          }
+        } catch {}
+        this.gain.gain.value = targetVol;
         this.gain.connect(this.ctx.destination);
       }
     }
 
-    async reschedule() {
-      const g = ++this.gen;
-      this.stopSources();
-      if (!this.active || !this.ctx || this.video.paused || this.video.ended) return;
+    reschedule() {
+      if (this._rescheduleTimer) clearTimeout(this._rescheduleTimer);
+      this._rescheduleTimer = setTimeout(() => {
+        this._rescheduleTimer = null;
+        this._executeReschedule();
+      }, 40);
+    }
+
+    async _executeReschedule() {
+      if (!this.active || !this.ctx || this.video.ended) return;
 
       if (this.ctx.state === "suspended") {
         await this.ctx.resume().catch(() => {});
       }
+      if (this.ctx.state !== "running") return;
+
+      if (this.video.paused) {
+        this.stopSources();
+        return;
+      }
+
+      const g = ++this.gen;
+      this.stopSources();
 
       const t0 = this.video.currentTime;
       const i0 = Math.max(0, Math.floor(t0 / CHUNK));
       const iMax = Math.min(this.nChunks - 1, Math.floor((t0 + SCHEDULE_AHEAD) / CHUNK));
-      const ctx0 = this.ctx.currentTime + 0.08;
+      const ctx0 = this.ctx.currentTime + 0.05;
       this.base = { ctx0, vid0: t0 };
 
+      let scheduled = 0;
       for (let i = i0; i <= iMax; i++) {
         if (!this.processed.has(i)) continue;
         const buf = await this.bufferFor(i);
@@ -736,7 +777,10 @@ self.VocalisEngine = (() => {
         src.connect(this.gain);
         src.start(when, offset);
         this.sources.push(src);
+        scheduled++;
       }
+      this.hooks.onLog &&
+        this.hooks.onLog(`relecture : ${scheduled} segment(s) actif(s) (t=${t0.toFixed(1)}s, ctx=${this.ctx.state})`);
     }
 
     downloadedTime() {
@@ -800,10 +844,19 @@ self.VocalisEngine = (() => {
           break;
         case "volumechange":
           if (this.gain) {
-            const v = typeof this.video.volume === "number" ? this.video.volume : 1.0;
-            if (v > 0) {
-              this.gain.gain.value = v;
+            let targetVol = 1.0;
+            try {
+              const p = document.getElementById("movie_player");
+              if (p && typeof p.getVolume === "function") {
+                const v = p.getVolume();
+                if (typeof v === "number" && v > 0) targetVol = v / 100;
+              }
+            } catch {
+              if (typeof this.video.volume === "number" && this.video.volume > 0) {
+                targetVol = this.video.volume;
+              }
             }
+            this.gain.gain.value = targetVol;
           }
           break;
       }
@@ -868,13 +921,21 @@ self.VocalisEngine = (() => {
         }
         this.hooks.onStallClear && this.hooks.onStallClear();
 
+        // Si aucune source n'est active alors que le bloc courant est prêt, on replanifie
+        if (this.sources.length === 0 && !this.video.paused) {
+          this.reschedule();
+          return;
+        }
+
         if (!this.base) { this.reschedule(); return; }
         const expected = this.base.vid0 + (this.ctx.currentTime - this.base.ctx0);
-        if (Math.abs(this.video.currentTime - expected) > DRIFT_MAX) this.reschedule();
+        if (Math.abs(this.video.currentTime - expected) > DRIFT_MAX) {
+          this.reschedule();
+        }
         this.trimMemory();
-      }, 400);
+      }, 500);
 
-      await this.reschedule();
+      this.reschedule();
     }
 
     deactivate() {
@@ -882,6 +943,10 @@ self.VocalisEngine = (() => {
       this.active = false;
       this.stalled = false;
       this.gen++;
+      if (this._rescheduleTimer) {
+        clearTimeout(this._rescheduleTimer);
+        this._rescheduleTimer = null;
+      }
       this.stopSources();
       if (this.watchdog) clearInterval(this.watchdog);
       this.watchdog = null;

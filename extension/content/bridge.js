@@ -23,25 +23,39 @@
     window.postMessage({ source: "vocalis-bridge", type, payload }, "*");
 
   function playerResponse() {
+    let pr = null;
     try {
-      const player = document.getElementById("movie_player");
-      if (player && typeof player.getPlayerResponse === "function") {
-        const pr = player.getPlayerResponse();
-        if (pr && pr.videoDetails) return pr;
+      const init = window.ytInitialPlayerResponse;
+      if (init && init.videoDetails) {
+        const initFormats = init.streamingData?.adaptiveFormats || [];
+        const hasSig = initFormats.some(
+          (f) => (f.mimeType || "").startsWith("audio/") && (f.signatureCipher || f.cipher || f.url)
+        );
+        if (hasSig) return init;
+        pr = init;
       }
     } catch {}
     try {
-      if (window.ytInitialPlayerResponse && window.ytInitialPlayerResponse.videoDetails) {
-        return window.ytInitialPlayerResponse;
+      const player = document.getElementById("movie_player");
+      if (player && typeof player.getPlayerResponse === "function") {
+        const ppr = player.getPlayerResponse();
+        if (ppr && ppr.videoDetails) {
+          const pprFormats = ppr.streamingData?.adaptiveFormats || [];
+          const hasSig = pprFormats.some(
+            (f) => (f.mimeType || "").startsWith("audio/") && (f.signatureCipher || f.cipher || f.url)
+          );
+          if (hasSig) return ppr;
+          if (!pr) pr = ppr;
+        }
       }
     } catch {}
     try {
       const flexy = document.querySelector("ytd-watch-flexy, ytd-watch-grid");
       if (flexy && flexy.playerData && flexy.playerData.videoDetails) {
-        return flexy.playerData;
+        if (!pr) pr = flexy.playerData;
       }
     } catch {}
-    return null;
+    return pr;
   }
 
   /* Requêtes du script de contenu */
