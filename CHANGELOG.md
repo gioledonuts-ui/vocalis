@@ -4,6 +4,22 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.7] — 2026-09-20
+
+### Corrigé (Cause racine de l'échec de téléchargement)
+- **Tolérance aux flux partiels (fin du blocage "toutes les sources ont échoué")** :
+  - Sur les flux mobiles où YouTube refuse les tranches au-delà de 1 Mo (HTTP 403),
+    le téléchargeur n'annule plus tout le processus avec une erreur fatale.
+  - Il conserve et exploite immédiatement l'audio reçu, permettant au pipeline
+    IA de traiter la vidéo sans interruption.
+- **Nouveaux clients Innertube non bridés** :
+  - Intégration du client `IOS` avec sa clé API officielle (`AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc`),
+    corrigeant l'erreur HTTP 400 et fournissant des flux audio directs complets sans restriction 1 Mo.
+  - Ajout des profils `MEDIA_CONNECT_FRONTEND` et `WEB_EMBEDDED_PLAYER`.
+- **Intégrité des URLs signées** :
+  - Préservation des paramètres de signature (`rn`, `rbuf`), évitant toute invalidation
+    du jeton de sécurité par les serveurs de streaming Google.
+
 ## [0.5.6] — 2026-09-20
 
 ### Corrigé (Cause racine du blocage à 37 % et de l'absence de son)

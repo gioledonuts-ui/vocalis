@@ -305,14 +305,13 @@ self.VocalisEngine = (() => {
       let received = 0;
       let total = expectedTotalBytes || 0;
       let start = 0;
+      let isComplete = false;
 
       // Nettoie l'URL de tout paramètre range conflictuel
       let cleanUrl = url;
       try {
         const u = new URL(url);
         u.searchParams.delete("range");
-        u.searchParams.delete("rn");
-        u.searchParams.delete("rbuf");
         cleanUrl = u.toString();
       } catch {}
 
@@ -353,7 +352,7 @@ self.VocalisEngine = (() => {
         throw new Error(`tranche ${Math.round(s / 1048576)} Mo (${errDetail})`);
       };
 
-      // 1. Première tranche pour connaître la taille totale
+      // 1. Première tranche
       const first = await fetchChunk(0, CHUNK_SIZE - 1);
       if (this.aborted) return null;
       if (!first.buf || first.buf.byteLength === 0) {
@@ -368,28 +367,34 @@ self.VocalisEngine = (() => {
 
       if (total) this.phase("download", Math.round((received / total) * 100));
 
-      // 2. Tranches suivantes : on télécharge tant qu'on n'a pas atteint la fin du flux
-      while (total ? start < total : true) {
-        if (this.aborted) return null;
-        if (first.buf.byteLength < CHUNK_SIZE && !total) break;
-
-        const end = total ? Math.min(start + CHUNK_SIZE - 1, total - 1) : start + CHUNK_SIZE - 1;
-        let chunk;
-        try {
-          chunk = await fetchChunk(start, end);
-        } catch (e) {
-          if (received > 0 && (!total || start >= total - CHUNK_SIZE)) {
+      // Vérifie si le fichier tient entièrement dans la première tranche
+      if ((first.buf.byteLength < CHUNK_SIZE && !total) || (total && received >= total)) {
+        isComplete = true;
+      } else {
+        // 2. Tranches suivantes : on télécharge tant qu'on n'a pas atteint la fin du flux
+        while (total ? start < total : true) {
+          if (this.aborted) return null;
+          const end = total ? Math.min(start + CHUNK_SIZE - 1, total - 1) : start + CHUNK_SIZE - 1;
+          let chunk;
+          try {
+            chunk = await fetchChunk(start, end);
+          } catch (e) {
+            // Si la tranche échoue (par ex. bride CDN à 1 Mo), on s'arrête sans crasher si on a déjà du contenu
+            this.hooks.onLog &&
+              this.hooks.onLog(`fin de flux ou bride atteinte à ${Math.round(received / 1024)} Ko (${e?.message || e})`);
             break;
           }
-          throw e;
+          if (this.aborted || !chunk || !chunk.buf || chunk.buf.byteLength === 0) break;
+          chunks.push(new Uint8Array(chunk.buf));
+          received += chunk.buf.byteLength;
+          if (chunk.total && chunk.total > total) total = chunk.total;
+          start += chunk.buf.byteLength;
+          if (total) this.phase("download", Math.round((received / total) * 100));
+          if (chunk.buf.byteLength < CHUNK_SIZE || (total && received >= total)) {
+            isComplete = true;
+            break;
+          }
         }
-        if (this.aborted || !chunk || !chunk.buf || chunk.buf.byteLength === 0) break;
-        chunks.push(new Uint8Array(chunk.buf));
-        received += chunk.buf.byteLength;
-        if (chunk.total && chunk.total > total) total = chunk.total;
-        start += chunk.buf.byteLength;
-        if (total) this.phase("download", Math.round((received / total) * 100));
-        if (chunk.buf.byteLength < CHUNK_SIZE) break;
       }
 
       const combined = new Uint8Array(received);
@@ -398,14 +403,16 @@ self.VocalisEngine = (() => {
         combined.set(c, off);
         off += c.byteLength;
       }
-      this.hooks.onLog && this.hooks.onLog(`audio complet reçu (${(received / (1024 * 1024)).toFixed(1)} Mo)`);
-      return combined.buffer;
+      this.hooks.onLog && this.hooks.onLog(`audio reçu (${(received / (1024 * 1024)).toFixed(1)} Mo, complet=${isComplete})`);
+      return { buf: combined.buffer, complete: isComplete };
     }
 
     async startPipelineAudio(candidates) {
       this.phase("download", 0);
       let arrayBuf = null;
       let successVia = null;
+      let partialBuf = null;
+      let partialVia = null;
 
       for (const cand of candidates) {
         this.via = cand.via;
@@ -417,15 +424,28 @@ self.VocalisEngine = (() => {
         }
         try {
           const expectedTotal = parseInt(cand.format?.contentLength || "0", 10);
-          arrayBuf = await this.downloadFullAudio(cand.format.url, expectedTotal);
-          if (arrayBuf && arrayBuf.byteLength > 64000) {
-            successVia = cand.via;
-            break;
+          const res = await this.downloadFullAudio(cand.format.url, expectedTotal);
+          if (res && res.buf && res.buf.byteLength > 64000) {
+            if (res.complete) {
+              arrayBuf = res.buf;
+              successVia = cand.via;
+              break;
+            } else if (!partialBuf) {
+              partialBuf = res.buf;
+              partialVia = cand.via;
+            }
           }
         } catch (e) {
           this.hooks.onLog &&
             this.hooks.onLog("échec via " + cand.via + " (" + (e?.message || e) + "), essai suivant…");
         }
+      }
+
+      if (!arrayBuf && partialBuf) {
+        arrayBuf = partialBuf;
+        successVia = partialVia;
+        this.hooks.onLog &&
+          this.hooks.onLog("utilisation du flux partiel reçu via : " + successVia);
       }
 
       if (!arrayBuf) {
@@ -436,7 +456,7 @@ self.VocalisEngine = (() => {
       }
 
       this.via = successVia;
-      this.hooks.onLog && this.hooks.onLog("audio téléchargé avec succès via : " + successVia);
+      this.hooks.onLog && this.hooks.onLog("audio prêt via : " + successVia);
 
       if (this.aborted) return;
 

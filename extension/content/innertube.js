@@ -11,32 +11,29 @@ self.VocalisInnertube = (() => {
   "use strict";
 
   /* Clients alignés sur l'état de l'art 2026 :
-     1. TVHTML5 & IOS : flux complets sans limite 1 Mo.
-     2. VISIONOS : direct si disponible (sinon LOGIN_REQUIRED).
-     3. ANDROID : repli mobile. */
+     1. IOS : client avec clé iOS dédiée (flux direct sans limite 1 Mo).
+     2. MEDIA_CONNECT_FRONTEND & WEB_EMBEDDED_PLAYER : flux directs sans restriction.
+     3. ANDROID : repli mobile (robuste, toujours disponible). */
   const CLIENTS = [
     {
-      clientName: "TVHTML5",
-      clientVersion: "7.20250630.19.00",
-      userAgent:
-        "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version YouTubeTV/7.20250630.19.00",
-    },
-    {
       clientName: "IOS",
-      clientVersion: "19.09.37",
+      clientVersion: "17.33.2",
       deviceModel: "iPhone14,3",
       userAgent:
-        "com.google.ios.youtube/19.09.37 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)",
+        "com.google.ios.youtube/17.33.2 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)",
+      apiKey: "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc",
     },
     {
-      clientName: "VISIONOS",
-      clientVersion: "1.02",
-      deviceMake: "Apple",
-      deviceModel: "RealityDevice17,1",
-      osName: "visionOS",
-      osVersion: "26.5.23O471",
+      clientName: "MEDIA_CONNECT_FRONTEND",
+      clientVersion: "0.1",
       userAgent:
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    },
+    {
+      clientName: "WEB_EMBEDDED_PLAYER",
+      clientVersion: "1.20241202.00.00",
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     },
     {
       clientName: "ANDROID",
@@ -67,21 +64,32 @@ self.VocalisInnertube = (() => {
         if (c.osName) client.osName = c.osName;
         if (c.osVersion) client.osVersion = c.osVersion;
 
+        const effectiveKey = c.apiKey || apiKey;
+        const bodyObj = {
+          videoId,
+          context: { client },
+        };
+        if (c.clientName === "IOS") {
+          bodyObj.playbackContext = {
+            contentPlaybackContext: { html5Preference: "HTML5_PREF_WANTS" },
+          };
+          bodyObj.contentCheckOk = true;
+          bodyObj.racyCheckOk = true;
+        } else {
+          bodyObj.playbackContext = {
+            contentPlaybackContext: { vis: 0, splay: false, autoQuality: true },
+          };
+        }
+
         const resp = await fetch(
           "https://www.youtube.com/youtubei/v1/player?key=" +
-            encodeURIComponent(apiKey) +
+            encodeURIComponent(effectiveKey) +
             "&prettyPrint=false",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             signal: AbortSignal.timeout(6000), // une requête qui traîne = client suivant
-            body: JSON.stringify({
-              videoId,
-              context: { client },
-              playbackContext: {
-                contentPlaybackContext: { vis: 0, splay: false, autoQuality: true },
-              },
-            }),
+            body: JSON.stringify(bodyObj),
           }
         );
         if (!resp.ok) { log("innertube " + c.clientName + " : HTTP " + resp.status); continue; }

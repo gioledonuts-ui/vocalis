@@ -113,8 +113,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     try {
       const u = new URL(msg.url);
       u.searchParams.delete("range");
-      u.searchParams.delete("rn");
-      u.searchParams.delete("rbuf");
       cleanUrl = u.toString();
     } catch {}
 
