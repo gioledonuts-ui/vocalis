@@ -703,9 +703,7 @@ self.VocalisEngine = (() => {
       }
       if (!this.gain && this.ctx) {
         this.gain = this.ctx.createGain();
-        const v = typeof this.video.volume === "number" ? this.video.volume : 1.0;
-        this.savedVolume = v > 0 ? v : 1.0;
-        this.gain.gain.value = this.savedVolume;
+        this.gain.gain.value = 1.0;
         this.gain.connect(this.ctx.destination);
       }
     }
@@ -755,6 +753,15 @@ self.VocalisEngine = (() => {
           if (this.ctx && this.ctx.state === "suspended") {
             this.ctx.resume().catch(() => {});
           }
+          if (this.active) {
+            if (!this.video.muted) this.video.muted = true;
+            try {
+              const p = document.getElementById("movie_player");
+              if (p && typeof p.mute === "function" && typeof p.isMuted === "function" && !p.isMuted()) {
+                p.mute();
+              }
+            } catch {}
+          }
           const t = this.video.currentTime;
           const idx = Math.floor(t / CHUNK);
           this.setPriorityIncr(idx);
@@ -773,6 +780,10 @@ self.VocalisEngine = (() => {
           if (this.video.playbackRate !== 1) {
             this.stopSources();
             this.video.muted = false;
+            try {
+              const p = document.getElementById("movie_player");
+              if (p && typeof p.unMute === "function") p.unMute();
+            } catch {}
             if (!this.rateNoticeShown) {
               this.rateNoticeShown = true;
               this.hooks.onNotice &&
@@ -780,6 +791,10 @@ self.VocalisEngine = (() => {
             }
           } else {
             this.video.muted = true;
+            try {
+              const p = document.getElementById("movie_player");
+              if (p && typeof p.mute === "function") p.mute();
+            } catch {}
             this.reschedule();
           }
           break;
@@ -787,7 +802,6 @@ self.VocalisEngine = (() => {
           if (this.gain) {
             const v = typeof this.video.volume === "number" ? this.video.volume : 1.0;
             if (v > 0) {
-              this.savedVolume = v;
               this.gain.gain.value = v;
             }
           }
@@ -818,6 +832,10 @@ self.VocalisEngine = (() => {
 
       this.active = true;
       this.video.muted = true;
+      try {
+        const p = document.getElementById("movie_player");
+        if (p && typeof p.mute === "function") p.mute();
+      } catch {}
 
       const events = ["play", "playing", "pause", "waiting", "ended", "seeked", "ratechange", "volumechange"];
       this._bound = this.onVideoEvent;
@@ -826,6 +844,15 @@ self.VocalisEngine = (() => {
       this.watchdog = setInterval(() => {
         if (!this.active || this.video.paused || this.stalled) return;
         if (this.video.playbackRate !== 1) return;
+
+        // Force le silence sur YouTube tant que Vocalis est actif
+        if (!this.video.muted) this.video.muted = true;
+        try {
+          const p = document.getElementById("movie_player");
+          if (p && typeof p.mute === "function" && typeof p.isMuted === "function" && !p.isMuted()) {
+            p.mute();
+          }
+        } catch {}
 
         if (this.ctx && this.ctx.state === "suspended") {
           this.ctx.resume().catch(() => {});
@@ -865,6 +892,10 @@ self.VocalisEngine = (() => {
         this._bound = null;
       }
       this.video.muted = false;
+      try {
+        const p = document.getElementById("movie_player");
+        if (p && typeof p.unMute === "function") p.unMute();
+      } catch {}
       if (this.ctx) this.ctx.close().catch(() => {});
       this.ctx = null;
       this.gain = null;

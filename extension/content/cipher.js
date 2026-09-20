@@ -176,6 +176,61 @@ self.VocalisCipher = (() => {
     return null;
   }
 
+  function interpretSignature(baseJs, s) {
+    try {
+      // Forme standard de la fonction signature YouTube (swap, splice, reverse)
+      const fnRegex = /(?:([$\w]+)\s*=\s*function\(\s*a\s*\)|function\s+([$\w]+)\(\s*a\s*\))\s*\{\s*a\s*=\s*a\.split\(\s*""\s*\);([\s\S]+?)return\s+a\.join\(\s*""\s*\)/g;
+      let fnMatch;
+      while ((fnMatch = fnRegex.exec(baseJs)) !== null) {
+        const fnBody = fnMatch[3];
+        const objMatch = /([$\w]+)\.([$\w]+)\(\s*a\s*(?:,\s*(\d+))?\s*\)/.exec(fnBody);
+        if (!objMatch) continue;
+        const objName = objMatch[1];
+
+        const objDefRegex = new RegExp("(?:var|const|let)?\\s*" + objName.replace("$", "\\$") + "\\s*=\\s*\\{([\\s\\S]+?)\\};");
+        const objDefMatch = objDefRegex.exec(baseJs);
+        if (!objDefMatch) continue;
+        const objBody = objDefMatch[1];
+
+        const methods = {};
+        const methodRegex = /([$\w]+)\s*:\s*function\s*\([^)]*\)\s*\{([\s\S]+?)\}/g;
+        let m;
+        while ((m = methodRegex.exec(objBody)) !== null) {
+          const methodName = m[1];
+          const methodCode = m[2];
+          if (methodCode.includes("reverse")) {
+            methods[methodName] = "reverse";
+          } else if (methodCode.includes("splice") || methodCode.includes("slice")) {
+            methods[methodName] = "splice";
+          } else {
+            methods[methodName] = "swap";
+          }
+        }
+
+        let arr = s.split("");
+        const callRegex = new RegExp(objName.replace("$", "\\$") + "\\.([$\\w]+)\\(\\s*a\\s*(?:,\\s*(\\d+))?\\s*\\)", "g");
+        while ((m = callRegex.exec(fnBody)) !== null) {
+          const action = methods[m[1]];
+          const arg = m[2] ? parseInt(m[2], 10) : 0;
+          if (action === "reverse") {
+            arr.reverse();
+          } else if (action === "splice") {
+            arr.splice(0, arg);
+          } else if (action === "swap") {
+            const temp = arr[0];
+            arr[0] = arr[arg % arr.length];
+            arr[arg % arr.length] = temp;
+          }
+        }
+        const result = arr.join("");
+        if (result && result.length >= 40 && /^[A-Za-z0-9._-]+$/.test(result)) {
+          return result;
+        }
+      }
+    } catch {}
+    return null;
+  }
+
   /**
    * Résout un format signatureCipher.
    * Retourne { url } ou null.
@@ -188,29 +243,32 @@ self.VocalisCipher = (() => {
       const sp = sc.get("sp") || "signature";
       if (!baseUrl || !s) return null;
 
-      // Motifs de sites d'appel d'abord, puis balayage des candidats ;
-      // chaque candidat est validé par sa sortie (longueur + alphabet).
-      const names = [];
-      const pat = findSigFnName(baseJs);
-      if (pat) names.push(pat);
-      for (const c of findSigCandidates(baseJs)) if (!names.includes(c)) names.push(c);
-      let sig = null;
-      for (const nm of names) {
-        const fn = bundle(baseJs, nm);
-        if (typeof fn !== "function") continue;
-        try {
-          const out = fn(s);
-          if (
-            typeof out === "string" &&
-            out.length >= 40 &&
-            out.length <= 200 &&
-            /^[A-Za-z0-9._-]+$/.test(out)
-          ) {
-            sig = out;
-            break;
+      // 1. Déchiffrement natif pur (sans eval ni new Function, 100 % conforme CSP)
+      let sig = interpretSignature(baseJs, s);
+
+      // 2. Si non trouvé, tentative par regroupement AST
+      if (!sig) {
+        const names = [];
+        const pat = findSigFnName(baseJs);
+        if (pat) names.push(pat);
+        for (const c of findSigCandidates(baseJs)) if (!names.includes(c)) names.push(c);
+        for (const nm of names) {
+          const fn = bundle(baseJs, nm);
+          if (typeof fn !== "function") continue;
+          try {
+            const out = fn(s);
+            if (
+              typeof out === "string" &&
+              out.length >= 40 &&
+              out.length <= 200 &&
+              /^[A-Za-z0-9._-]+$/.test(out)
+            ) {
+              sig = out;
+              break;
+            }
+          } catch {
+            /* candidat suivant */
           }
-        } catch {
-          /* candidat suivant */
         }
       }
       if (!sig) return null;

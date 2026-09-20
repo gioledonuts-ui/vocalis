@@ -4,6 +4,22 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.8] — 2026-09-20
+
+### Corrigé (Cause racine du son original persistant & flux PC natif)
+- **Silence absolu de la musique originale YouTube** :
+  - Dès l'activation de Vocalis, l'API interne du lecteur YouTube (`movie_player.mute()`)
+    est appelée et `video.muted = true` est verrouillé en continu contre toute tentative
+    de réactivation automatique par YouTube lors de la reprise de lecture.
+  - La musique de fond d'origine est désormais 100 % inaudible.
+- **Volume plein pour la voix isolée Vocalis** :
+  - Découplage complet entre le mute de YouTube et le gain audio de Vocalis (initialisé à 100 %).
+- **Déchiffreur natif pur JavaScript (sans eval / CSP compliant)** :
+  - Déchiffrement direct des 12 flux audio du lecteur Web PC sans passer par `eval()` ni
+    `new Function()` (qui étaient bloqués par la Content Security Policy de Chrome).
+  - Utilise l'interpréteur statique (swap, splice, reverse) aligné sur `yt-dlp`.
+  - Permet d'obtenir le flux natif PC haute fidélité sans aucune limitation de taille mobile.
+
 ## [0.5.7] — 2026-09-20
 
 ### Corrigé (Cause racine de l'échec de téléchargement)
