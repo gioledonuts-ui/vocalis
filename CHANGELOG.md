@@ -4,6 +4,28 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.3] — 2026-09-20
+
+### Corrigé
+- **« Failed to fetch » (téléchargement audio YouTube)** :
+  - Les requêtes `fetch()` depuis un content script vers `googlevideo.com`
+    étaient rejetées par la politique CORS du navigateur.
+  - Mise en place d'un système à double niveau :
+    1. Règles déclaratives réseau injectant les en-têtes CORS (`access-control-allow-origin: *`)
+       sur `googlevideo.com`.
+    2. Repli automatique et transparent via le service worker de l'extension
+       (`vocalis:fetch-range`), 100 % immunisé contre les restrictions CORS.
+- **« Pipeline bloqué à l'étape model »** :
+  - Le watchdog de 45 secondes n'était pas désactivé en cas d'erreur réseau,
+    écrasant le message d'erreur réel par un faux message de blocage de modèle.
+    Désactivation immédiate du watchdog dès qu'une erreur survient.
+- **Bouton du lecteur YouTube** :
+  - Rendu SVG utilisant la classe native YouTube `ytp-svg-fill` et dessin en `<path>`
+    au lieu de `<rect>` pour une compatibilité parfaite avec tous les thèmes du lecteur.
+  - Styles forcés (`!important`), positionnement garanti immédiatement à gauche
+    de l'engrenage des paramètres (`.ytp-settings-button`), et surveillance continue
+    par `MutationObserver`.
+
 ## [0.5.2] — 2026-09-20
 
 ### Ajouté

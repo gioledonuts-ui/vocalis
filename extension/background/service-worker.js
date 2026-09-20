@@ -11,6 +11,73 @@
 
 const BADGE_COLOR = "#7c3aed"; // violet Vocalis
 
+function arrayBufferToBase64(buffer) {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  const chunk = 8192;
+  for (let i = 0; i < len; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + chunk, len)));
+  }
+  return btoa(binary);
+}
+
+async function setupNetRules(ua) {
+  const userAgent = ua || "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip";
+  try {
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [1001],
+      addRules: [
+        {
+          id: 1001,
+          priority: 1,
+          action: {
+            type: "modifyHeaders",
+            requestHeaders: [
+              {
+                header: "user-agent",
+                operation: "set",
+                value: userAgent,
+              },
+            ],
+            responseHeaders: [
+              {
+                header: "access-control-allow-origin",
+                operation: "set",
+                value: "*",
+              },
+              {
+                header: "access-control-allow-methods",
+                operation: "set",
+                value: "GET, HEAD, OPTIONS",
+              },
+              {
+                header: "access-control-allow-headers",
+                operation: "set",
+                value: "*",
+              },
+              {
+                header: "access-control-expose-headers",
+                operation: "set",
+                value: "Content-Length, Content-Range, Accept-Ranges",
+              },
+            ],
+          },
+          condition: {
+            urlFilter: "googlevideo.com",
+            resourceTypes: ["xmlhttprequest", "other", "media"],
+          },
+        },
+      ],
+    });
+  } catch (e) {
+    console.error("Erreur declarativeNetRequest :", e);
+  }
+}
+
+// Initialise immédiatement les règles réseau dès le démarrage
+setupNetRules();
+
 /* Document offscreen (hébergement du worker IA) : créé à la demande,
    une seule instance. */
 let offscreenCreating = null;
@@ -37,6 +104,7 @@ async function ensureOffscreen() {
 chrome.runtime.onInstalled.addListener(async () => {
   // Nettoie les onglets activés d'une précédente session (les tabId ne survivent pas).
   chrome.storage.local.set({ enabledTabs: {} });
+  await setupNetRules();
 
   // Ré-injection automatique sur les onglets YouTube ouverts afin que l'utilisateur
   // n'ait pas besoin de recharger la page après une mise à jour de l'extension.
@@ -76,33 +144,38 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // Définit le User-Agent sortant pour googlevideo.com afin d'éviter le rejet
   // 403 CDN (YouTube vérifie la concordance entre le client et le User-Agent).
   if (msg.type === "vocalis:set-stream-ua") {
-    const ua = msg.ua || "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip";
-    chrome.declarativeNetRequest
-      .updateDynamicRules({
-        removeRuleIds: [1001],
-        addRules: [
-          {
-            id: 1001,
-            priority: 1,
-            action: {
-              type: "modifyHeaders",
-              requestHeaders: [
-                {
-                  header: "user-agent",
-                  operation: "set",
-                  value: ua,
-                },
-              ],
-            },
-            condition: {
-              urlFilter: "googlevideo.com",
-              resourceTypes: ["xmlhttprequest", "other", "media"],
-            },
-          },
-        ],
-      })
+    setupNetRules(msg.ua)
       .then(() => sendResponse({ ok: true }))
       .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+
+  // Téléchargement sécurisé de tranches audio sans restriction CORS
+  // (exécuté avec l'origine de l'extension et les host_permissions googlevideo).
+  if (msg.type === "vocalis:fetch-range") {
+    const headers = {};
+    if (msg.start != null && msg.end != null) {
+      headers["Range"] = `bytes=${msg.start}-${msg.end}`;
+    }
+    fetch(msg.url, { headers })
+      .then(async (resp) => {
+        if (!resp.ok && resp.status !== 206) {
+          sendResponse({ ok: false, status: resp.status });
+          return;
+        }
+        const cr = resp.headers.get("content-range");
+        let total = 0;
+        const m = cr && cr.match(/\/(\d+)$/);
+        if (m) total = parseInt(m[1], 10);
+        else total = parseInt(resp.headers.get("content-length") || "0", 10);
+
+        const buf = await resp.arrayBuffer();
+        const base64 = arrayBufferToBase64(buf);
+        sendResponse({ ok: true, base64, total });
+      })
+      .catch((err) => {
+        sendResponse({ ok: false, error: err?.message || String(err) });
+      });
     return true;
   }
 

@@ -50,22 +50,32 @@
   /* ------------------------------------------------------------------ */
 
   function insertPlayerButton() {
-    const rightControls = document.querySelector(".ytp-right-controls");
+    const player = document.getElementById("movie_player") || document.querySelector(".html5-video-player");
+    const rightControls = player
+      ? player.querySelector(".ytp-right-controls")
+      : document.querySelector(".ytp-right-controls");
     if (!rightControls) return;
 
     let btn = document.getElementById("vocalis-player-btn");
+    if (btn && btn.parentNode === rightControls) {
+      updatePlayerButton();
+      return;
+    }
+
     if (!btn) {
       btn = document.createElement("button");
       btn.id = "vocalis-player-btn";
       btn.className = "ytp-button vocalis-player-btn";
       btn.setAttribute("aria-label", "Vocalis — Retirer la musique de fond (Alt+V)");
+      btn.setAttribute("title", "Vocalis — Retirer la musique de fond (Alt+V)");
+      btn.style.cssText =
+        "display:inline-flex!important;align-items:center!important;justify-content:center!important;" +
+        "width:46px!important;height:100%!important;vertical-align:top!important;cursor:pointer!important;" +
+        "opacity:0.9;padding:0!important;border:none!important;background:transparent!important;";
+
       btn.innerHTML = `
-        <svg viewBox="0 0 36 36" width="36" height="36">
-          <rect x="7" y="13" width="3" height="10" rx="1.5" fill="currentColor"/>
-          <rect x="12" y="9" width="3" height="18" rx="1.5" fill="currentColor"/>
-          <rect x="17" y="6" width="3" height="24" rx="1.5" fill="currentColor"/>
-          <rect x="22" y="11" width="3" height="14" rx="1.5" fill="currentColor"/>
-          <rect x="27" y="8" width="3" height="20" rx="1.5" fill="currentColor"/>
+        <svg height="100%" version="1.1" viewBox="0 0 36 36" width="100%" style="pointer-events:none;width:100%!important;height:100%!important;">
+          <path class="ytp-svg-fill vocalis-icon-path" fill="#ffffff" d="M 8.5,13 h 0.0 a 1.5,1.5 0 0 1 1.5,1.5 v 7.0 a 1.5,1.5 0 0 1 -1.5,1.5 h -0.0 a 1.5,1.5 0 0 1 -1.5,-1.5 v -7.0 a 1.5,1.5 0 0 1 1.5,-1.5 Z M 13.5,9 h 0.0 a 1.5,1.5 0 0 1 1.5,1.5 v 15.0 a 1.5,1.5 0 0 1 -1.5,1.5 h -0.0 a 1.5,1.5 0 0 1 -1.5,-1.5 v -15.0 a 1.5,1.5 0 0 1 1.5,-1.5 Z M 18.5,6 h 0.0 a 1.5,1.5 0 0 1 1.5,1.5 v 21.0 a 1.5,1.5 0 0 1 -1.5,1.5 h -0.0 a 1.5,1.5 0 0 1 -1.5,-1.5 v -21.0 a 1.5,1.5 0 0 1 1.5,-1.5 Z M 23.5,11 h 0.0 a 1.5,1.5 0 0 1 1.5,1.5 v 11.0 a 1.5,1.5 0 0 1 -1.5,1.5 h -0.0 a 1.5,1.5 0 0 1 -1.5,-1.5 v -11.0 a 1.5,1.5 0 0 1 1.5,-1.5 Z M 28.5,8 h 0.0 a 1.5,1.5 0 0 1 1.5,1.5 v 17.0 a 1.5,1.5 0 0 1 -1.5,1.5 h -0.0 a 1.5,1.5 0 0 1 -1.5,-1.5 v -17.0 a 1.5,1.5 0 0 1 1.5,-1.5 Z"></path>
         </svg>
       `;
 
@@ -75,18 +85,24 @@
         setEnabled(!state.enabled);
       });
 
-      // Insertion dans la barre de contrôle :
-      // Avant les sous-titres ou paramètres si présents, sinon au tout début
-      const anchor =
-        rightControls.querySelector(".ytp-subtitles-button") ||
-        rightControls.querySelector(".ytp-settings-button") ||
-        rightControls.firstChild;
+      btn.addEventListener("mouseenter", () => {
+        btn.style.opacity = "1";
+        btn.style.transform = "scale(1.1)";
+      });
+      btn.addEventListener("mouseleave", () => {
+        btn.style.opacity = state.enabled ? "1" : "0.9";
+        btn.style.transform = "scale(1)";
+      });
+    }
 
-      if (anchor) {
-        rightControls.insertBefore(btn, anchor);
-      } else {
-        rightControls.appendChild(btn);
-      }
+    const settingsBtn = rightControls.querySelector(".ytp-settings-button");
+    const subsBtn = rightControls.querySelector(".ytp-subtitles-button");
+    const target = subsBtn || settingsBtn;
+
+    if (target && target.parentNode === rightControls) {
+      rightControls.insertBefore(btn, target);
+    } else {
+      rightControls.prepend(btn);
     }
 
     updatePlayerButton();
@@ -96,6 +112,7 @@
     const btn = document.getElementById("vocalis-player-btn");
     if (!btn) return;
 
+    const path = btn.querySelector(".vocalis-icon-path");
     const isActive = state.enabled && !!state.engine?.active;
     const isPreparing = state.enabled && !state.engine?.active && !state.status.notice;
     const isError = state.enabled && !!state.status.notice && !state.engine?.started;
@@ -103,6 +120,22 @@
     btn.classList.toggle("active", isActive);
     btn.classList.toggle("loading", isPreparing);
     btn.classList.toggle("error", isError);
+
+    if (path) {
+      if (isActive) {
+        path.setAttribute("fill", "#a78bfa");
+        path.style.filter = "drop-shadow(0 0 5px rgba(167, 139, 250, 0.9))";
+      } else if (isPreparing) {
+        path.setAttribute("fill", "#22d3ee");
+        path.style.filter = "drop-shadow(0 0 4px #22d3ee)";
+      } else if (isError) {
+        path.setAttribute("fill", "#f87171");
+        path.style.filter = "none";
+      } else {
+        path.setAttribute("fill", "#ffffff");
+        path.style.filter = "none";
+      }
+    }
 
     if (isActive) {
       btn.title = "Vocalis : Actif (musique retirée, voix seules) — Cliquer pour couper (Alt+V)";
@@ -302,6 +335,10 @@
       onError: (msg) => {
         state.status.notice = msg;
         updatePlayerButton();
+        if (state.stallTimer) {
+          clearInterval(state.stallTimer);
+          state.stallTimer = null;
+        }
         if (state.enabled) {
           showOverlay({ title: msg, subtitle: "", error: true, closable: true, pct: null });
         }
@@ -472,8 +509,18 @@
     }
   });
 
-  // Insertion et surveillance du bouton dans la barre de contrôle YouTube
+  // Insertion et surveillance continue du bouton dans la barre de contrôle YouTube
   insertPlayerButton();
-  setInterval(insertPlayerButton, 1500);
+  setInterval(insertPlayerButton, 800);
   window.addEventListener("yt-navigate-finish", insertPlayerButton);
+  window.addEventListener("yt-player-updated", insertPlayerButton);
+
+  try {
+    const obs = new MutationObserver(() => {
+      if (!document.getElementById("vocalis-player-btn")) {
+        insertPlayerButton();
+      }
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+  } catch {}
 })();

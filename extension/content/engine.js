@@ -288,58 +288,79 @@ self.VocalisEngine = (() => {
 
     /* ---------------- Téléchargement complet résilient ---------------- */
 
-    async downloadFullAudio(url) {
-      // 1. Essai direct (rapide si le CDN l'accepte)
-      try {
-        const resp = await fetch(url);
-        if (resp.ok && resp.body) {
-          const total = parseInt(resp.headers.get("content-length") || "0", 10);
-          const reader = resp.body.getReader();
-          const chunks = [];
-          let received = 0;
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (this.aborted) return null;
-            chunks.push(value);
-            received += value.length;
-            if (total) this.phase("download", Math.round((received / total) * 100));
-          }
-          return await new Blob(chunks).arrayBuffer();
-        }
-      } catch {
-        /* Repli sur Range ci-dessous */
+    base64ToArrayBuffer(base64) {
+      const binaryString = atob(base64);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
       }
+      return bytes.buffer;
+    }
 
-      // 2. Repli tranches Range 1 Mo bornées (accepté par tous les CDN googlevideo)
-      this.hooks.onLog && this.hooks.onLog("téléchargement par tranches bornées de 1 Mo…");
-      const CHUNK_SIZE = 1024 * 1024;
-      let start = 0;
-      let total = 0;
+    async downloadFullAudio(url) {
+      this.hooks.onLog && this.hooks.onLog("démarrage du téléchargement audio résilient…");
+      const CHUNK_SIZE = 1024 * 1024; // 1 Mo par tranche
       const chunks = [];
       let received = 0;
+      let total = 0;
+      let start = 0;
 
-      const firstResp = await fetch(url, { headers: { Range: `bytes=0-${CHUNK_SIZE - 1}` } });
-      if (!firstResp.ok && firstResp.status !== 206) {
-        throw new Error("HTTP " + firstResp.status);
-      }
-      const cr = firstResp.headers.get("content-range");
-      const m = cr && cr.match(/\/(\d+)$/);
-      if (m) total = parseInt(m[1], 10);
-      const firstBuf = await firstResp.arrayBuffer();
-      chunks.push(new Uint8Array(firstBuf));
-      received += firstBuf.byteLength;
+      // Télécharge une tranche : 1er essai direct (page/CORS DNR), 2nd essai via l'extension (service worker)
+      const fetchChunk = async (s, e) => {
+        const rangeHeader = e != null ? `bytes=${s}-${e}` : `bytes=${s}-`;
+        try {
+          const resp = await fetch(url, {
+            headers: { Range: rangeHeader },
+            signal: AbortSignal.timeout(10000),
+          });
+          if (resp.ok || resp.status === 206) {
+            const buf = await resp.arrayBuffer();
+            const cr = resp.headers.get("content-range");
+            let t = 0;
+            const m = cr && cr.match(/\/(\d+)$/);
+            if (m) t = parseInt(m[1], 10);
+            else t = parseInt(resp.headers.get("content-length") || "0", 10);
+            return { buf, total: t };
+          }
+        } catch {
+          // Erreur CORS / Failed to fetch : repli automatique vers l'extension ci-dessous
+        }
+
+        // Repli service worker (100 % hors CORS, permissions d'extension)
+        const bgRes = await new Promise((resolve) => {
+          chrome.runtime.sendMessage(
+            { type: "vocalis:fetch-range", url, start: s, end: e },
+            (res) => resolve(res || { ok: false })
+          );
+        });
+
+        if (bgRes && bgRes.ok && bgRes.base64) {
+          const buf = this.base64ToArrayBuffer(bgRes.base64);
+          return { buf, total: bgRes.total || 0 };
+        }
+
+        throw new Error(bgRes?.error || `Impossible de télécharger la tranche ${Math.round(s / 1048576)} Mo`);
+      };
+
+      // 1. Première tranche pour connaître la taille totale
+      const first = await fetchChunk(0, CHUNK_SIZE - 1);
+      if (this.aborted) return null;
+      chunks.push(new Uint8Array(first.buf));
+      received += first.buf.byteLength;
+      total = first.total || first.buf.byteLength;
       start = CHUNK_SIZE;
+
       if (total) this.phase("download", Math.round((received / total) * 100));
 
+      // 2. Tranches suivantes
       while (start < total) {
         if (this.aborted) return null;
         const end = Math.min(start + CHUNK_SIZE - 1, total - 1);
-        const r = await fetch(url, { headers: { Range: `bytes=${start}-${end}` } });
-        if (!r.ok && r.status !== 206) throw new Error("HTTP " + r.status);
-        const b = await r.arrayBuffer();
-        chunks.push(new Uint8Array(b));
-        received += b.byteLength;
+        const chunk = await fetchChunk(start, end);
+        if (this.aborted) return null;
+        chunks.push(new Uint8Array(chunk.buf));
+        received += chunk.buf.byteLength;
         start = end + 1;
         if (total) this.phase("download", Math.round((received / total) * 100));
       }
@@ -350,6 +371,7 @@ self.VocalisEngine = (() => {
         combined.set(c, off);
         off += c.byteLength;
       }
+      this.hooks.onLog && this.hooks.onLog(`audio complet reçu (${(received / (1024 * 1024)).toFixed(1)} Mo)`);
       return combined.buffer;
     }
 
