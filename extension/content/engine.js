@@ -129,8 +129,28 @@ self.VocalisEngine = (() => {
       log("flux page : " + pageAudio.length + " formats audio");
 
       // 1. Déchiffrement du flux natif de la page (prioritaire : le flux du lecteur web n'a AUCUNE limite de 1 Mo)
-      const jsUrl = this.extras?.playerJsUrl;
-      const ciphers = pageAudio.filter((f) => f.signatureCipher);
+      let jsUrl = this.extras?.playerJsUrl;
+      if (!jsUrl) {
+        try {
+          const scripts = Array.from(document.querySelectorAll("script[src]"));
+          for (const s of scripts) {
+            const src = s.src || "";
+            if (src.includes("/s/player/") && (src.includes("base.js") || src.includes("player_ias") || src.includes("desktop_polymer"))) {
+              jsUrl = src;
+              break;
+            }
+          }
+          if (!jsUrl) {
+            for (const s of scripts) {
+              const src = s.src || "";
+              if (src.includes("/s/player/")) { jsUrl = src; break; }
+            }
+          }
+        } catch {}
+      }
+
+      const ciphers = pageAudio.filter((f) => f.signatureCipher || f.cipher);
+      log("déchiffrement : jsUrl=" + (jsUrl ? "OK" : "aucun") + ", formats chiffrés=" + ciphers.length);
       if (jsUrl && ciphers.length) {
         log("déchiffrement : analyse des " + ciphers.length + " formats signés…");
         const variants = [jsUrl];
@@ -180,10 +200,11 @@ self.VocalisEngine = (() => {
         const baseJs = await withTimeout(resp.text(), 15000, label + " (lecture)");
         log(label + " chargé (" + Math.round(baseJs.length / 1024) + " Ko)");
         const cands = pageAudio
-          .filter((f) => f.signatureCipher)
+          .filter((f) => f.signatureCipher || f.cipher)
           .sort((a, b) => (b.bitrate || b.averageBitrate || 0) - (a.bitrate || a.averageBitrate || 0));
         for (const f of cands) {
-          const solved = VocalisCipher.solve(baseJs, f.signatureCipher);
+          const cipherText = f.signatureCipher || f.cipher;
+          const solved = VocalisCipher.solve(baseJs, cipherText);
           if (solved) {
             const withSolved = { ...f, url: solved.url };
             out.via = "déchiffrement";
@@ -277,12 +298,12 @@ self.VocalisEngine = (() => {
       return bytes.buffer;
     }
 
-    async downloadFullAudio(url) {
+    async downloadFullAudio(url, expectedTotalBytes = 0) {
       this.hooks.onLog && this.hooks.onLog("démarrage du téléchargement audio résilient…");
       const CHUNK_SIZE = 1024 * 1024; // 1 Mo par tranche
       const chunks = [];
       let received = 0;
-      let total = 0;
+      let total = expectedTotalBytes || 0;
       let start = 0;
 
       // Nettoie l'URL de tout paramètre range conflictuel
@@ -309,7 +330,6 @@ self.VocalisEngine = (() => {
             let t = 0;
             const m = cr && cr.match(/\/(\d+)$/);
             if (m) t = parseInt(m[1], 10);
-            else t = parseInt(resp.headers.get("content-length") || "0", 10);
             return { buf, total: t };
           }
         } catch {
@@ -336,23 +356,40 @@ self.VocalisEngine = (() => {
       // 1. Première tranche pour connaître la taille totale
       const first = await fetchChunk(0, CHUNK_SIZE - 1);
       if (this.aborted) return null;
+      if (!first.buf || first.buf.byteLength === 0) {
+        throw new Error("tranche 0 vide");
+      }
       chunks.push(new Uint8Array(first.buf));
       received += first.buf.byteLength;
-      total = first.total || first.buf.byteLength;
-      start = CHUNK_SIZE;
+      if (first.total && first.total > first.buf.byteLength) {
+        total = first.total;
+      }
+      start = received;
 
       if (total) this.phase("download", Math.round((received / total) * 100));
 
-      // 2. Tranches suivantes
-      while (start < total) {
+      // 2. Tranches suivantes : on télécharge tant qu'on n'a pas atteint la fin du flux
+      while (total ? start < total : true) {
         if (this.aborted) return null;
-        const end = Math.min(start + CHUNK_SIZE - 1, total - 1);
-        const chunk = await fetchChunk(start, end);
-        if (this.aborted) return null;
+        if (first.buf.byteLength < CHUNK_SIZE && !total) break;
+
+        const end = total ? Math.min(start + CHUNK_SIZE - 1, total - 1) : start + CHUNK_SIZE - 1;
+        let chunk;
+        try {
+          chunk = await fetchChunk(start, end);
+        } catch (e) {
+          if (received > 0 && (!total || start >= total - CHUNK_SIZE)) {
+            break;
+          }
+          throw e;
+        }
+        if (this.aborted || !chunk || !chunk.buf || chunk.buf.byteLength === 0) break;
         chunks.push(new Uint8Array(chunk.buf));
         received += chunk.buf.byteLength;
-        start = end + 1;
+        if (chunk.total && chunk.total > total) total = chunk.total;
+        start += chunk.buf.byteLength;
         if (total) this.phase("download", Math.round((received / total) * 100));
+        if (chunk.buf.byteLength < CHUNK_SIZE) break;
       }
 
       const combined = new Uint8Array(received);
@@ -379,7 +416,8 @@ self.VocalisEngine = (() => {
             .catch(() => {});
         }
         try {
-          arrayBuf = await this.downloadFullAudio(cand.format.url);
+          const expectedTotal = parseInt(cand.format?.contentLength || "0", 10);
+          arrayBuf = await this.downloadFullAudio(cand.format.url, expectedTotal);
           if (arrayBuf && arrayBuf.byteLength > 64000) {
             successVia = cand.via;
             break;
@@ -589,6 +627,7 @@ self.VocalisEngine = (() => {
     /* ---------------------------------------------------------- */
 
     async bufferFor(i) {
+      if (!this.ctx) return null;
       const cached = this.buffers.get(i);
       if (cached) return cached;
       let pcm = this.mem.get(i);
@@ -629,10 +668,36 @@ self.VocalisEngine = (() => {
       this.base = null;
     }
 
+    initAudioContext() {
+      if (!this.ctx) {
+        try {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SR });
+        } catch {
+          try {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+          } catch {}
+        }
+      }
+      if (this.ctx && this.ctx.state === "suspended") {
+        this.ctx.resume().catch(() => {});
+      }
+      if (!this.gain && this.ctx) {
+        this.gain = this.ctx.createGain();
+        const v = typeof this.video.volume === "number" ? this.video.volume : 1.0;
+        this.savedVolume = v > 0 ? v : 1.0;
+        this.gain.gain.value = this.savedVolume;
+        this.gain.connect(this.ctx.destination);
+      }
+    }
+
     async reschedule() {
       const g = ++this.gen;
       this.stopSources();
       if (!this.active || !this.ctx || this.video.paused || this.video.ended) return;
+
+      if (this.ctx.state === "suspended") {
+        await this.ctx.resume().catch(() => {});
+      }
 
       const t0 = this.video.currentTime;
       const i0 = Math.max(0, Math.floor(t0 / CHUNK));
@@ -664,18 +729,18 @@ self.VocalisEngine = (() => {
       if (!this.active) return;
       switch (ev.type) {
         case "play":
+        case "playing":
         case "seeked": {
           this.stalled = false;
+          if (this.ctx && this.ctx.state === "suspended") {
+            this.ctx.resume().catch(() => {});
+          }
           const t = this.video.currentTime;
           const idx = Math.floor(t / CHUNK);
           this.setPriorityIncr(idx);
           if (this.video.playbackRate === 1) this.reschedule();
           break;
         }
-        case "playing":
-          this.stalled = false;
-          if (this.video.playbackRate === 1) this.reschedule();
-          break;
         case "pause":
         case "ended":
           this.stopSources();
@@ -699,7 +764,13 @@ self.VocalisEngine = (() => {
           }
           break;
         case "volumechange":
-          if (this.gain) this.gain.gain.value = this.video.volume;
+          if (this.gain) {
+            const v = typeof this.video.volume === "number" ? this.video.volume : 1.0;
+            if (v > 0) {
+              this.savedVolume = v;
+              this.gain.gain.value = v;
+            }
+          }
           break;
       }
     };
@@ -720,10 +791,10 @@ self.VocalisEngine = (() => {
         return;
       }
 
-      this.ctx = new AudioContext();
-      this.gain = this.ctx.createGain();
-      this.gain.gain.value = this.video.volume;
-      this.gain.connect(this.ctx.destination);
+      this.initAudioContext();
+      if (this.ctx && this.ctx.state === "suspended") {
+        await this.ctx.resume().catch(() => {});
+      }
 
       this.active = true;
       this.video.muted = true;
@@ -735,6 +806,10 @@ self.VocalisEngine = (() => {
       this.watchdog = setInterval(() => {
         if (!this.active || this.video.paused || this.stalled) return;
         if (this.video.playbackRate !== 1) return;
+
+        if (this.ctx && this.ctx.state === "suspended") {
+          this.ctx.resume().catch(() => {});
+        }
 
         const cur = Math.floor(this.video.currentTime / CHUNK);
         if (!this.processed.has(cur)) {

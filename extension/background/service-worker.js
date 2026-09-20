@@ -137,7 +137,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               let t2 = 0;
               const m2 = cr2 && cr2.match(/\/(\d+)$/);
               if (m2) t2 = parseInt(m2[1], 10);
-              else t2 = parseInt(resp2.headers.get("content-length") || "0", 10);
+              else if (resp2.status === 200) t2 = parseInt(resp2.headers.get("content-length") || "0", 10);
               sendResponse({ ok: true, base64, total: t2 });
               return;
             }
@@ -149,7 +149,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         let total = 0;
         const m = cr && cr.match(/\/(\d+)$/);
         if (m) total = parseInt(m[1], 10);
-        else total = parseInt(resp.headers.get("content-length") || "0", 10);
+        else if (resp.status === 200) total = parseInt(resp.headers.get("content-length") || "0", 10);
 
         const buf = await resp.arrayBuffer();
         const base64 = arrayBufferToBase64(buf);

@@ -4,6 +4,29 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.6] — 2026-09-20
+
+### Corrigé (Cause racine du blocage à 37 % et de l'absence de son)
+- **Déverrouillage immédiat du son (AudioContext & Autoplay)** :
+  - Dans Chrome, tout `AudioContext` instancié de manière asynchrone (après l'inférence IA)
+    est automatiquement suspendu par la politique d'autoplay du navigateur (`state: "suspended"`),
+    ce qui empêchait la lecture du son des voix isolées.
+  - L'AudioContext est désormais pré-initialisé et déverrouillé dès le clic de l'utilisateur
+    sur le bouton Vocalis (geste utilisateur actif). Des appels de réveil `ctx.resume()` sont
+    garantis à la reprise de lecture (`play`/`playing`/`reschedule`).
+  - Protection du volume : si la vidéo YouTube passe en sourdine lors du remplacement audio,
+    le gain de Vocalis n'est plus écrasé à 0.
+- **Téléchargement audio complet (fin de l'arrêt prématuré à 1.0 Mo)** :
+  - Sur les requêtes HTTP 206 (Partial Content), `Content-Length` ne représente que la tranche
+    reçue (1 Mo) et non la taille totale du fichier. Le service worker ne confond plus cette
+    valeur avec la taille totale, évitant ainsi d'arrêter le téléchargement après une seule tranche.
+  - La boucle de téléchargement itère désormais sur toutes les tranches successives jusqu'à la fin
+    réelle du flux audio (ou taille totale déclarée par le format).
+- **Déchiffrement Web optimisé** :
+  - Prise en charge des formats `cipher` et `signatureCipher`.
+  - Recherche automatique du script `base.js` directement dans le DOM si le pont n'a pas
+    fourni l'URL immédiatement.
+
 ## [0.5.5] — 2026-09-20
 
 ### Corrigé (Cause racine du chargement infini sur YouTube)

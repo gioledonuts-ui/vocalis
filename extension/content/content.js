@@ -354,13 +354,21 @@
         updateBufferBar(engine.ranges(), duration);
         updatePlayerButton();
         if (state.enabled) {
+          engine.initAudioContext();
           engine.activate();
-          if (state.pausedByUs) getVideoElement()?.play().catch(() => {});
+          if (state.pausedByUs) {
+            const v = getVideoElement();
+            if (v && v.paused) {
+              v.play().catch(() => {});
+            }
+          }
         }
       },
     });
 
     state.engine = engine;
+    // Déverrouille immédiatement l'AudioContext lors du clic utilisateur
+    engine.initAudioContext();
 
     /* Garde-fou : si la phase reste figée 45 s, on l'affiche au lieu de
        laisser un chargement infini silencieux. */

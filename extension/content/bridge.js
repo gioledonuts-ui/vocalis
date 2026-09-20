@@ -62,14 +62,22 @@
     try {
       const js =
         playerResponse()?.assets?.js ||
-        (window.ytplayer && window.ytplayer.config && window.ytplayer.config.assets?.js);
+        (window.ytplayer && window.ytplayer.config && window.ytplayer.config.assets?.js) ||
+        (window.yt && window.yt.config_ && window.yt.config_.PLAYER_CONFIG && window.yt.config_.PLAYER_CONFIG.assets?.js);
       if (js) return js.startsWith("http") ? js : "https://www.youtube.com" + js;
-      // Le playerResponse runtime n'a pas toujours d'assets : on cherche la
-      // balise <script> du lecteur chargée par la page elle-même.
-      const el = document.querySelector(
-        'script[src*="/s/player/"][src$="base.js"], script[src*="/s/player/"][src*="player_ias"]'
-      );
-      return el ? el.src : null;
+
+      const scripts = Array.from(document.querySelectorAll("script[src]"));
+      for (const s of scripts) {
+        const src = s.src || "";
+        if (src.includes("/s/player/") && (src.includes("base.js") || src.includes("player_ias") || src.includes("desktop_polymer"))) {
+          return src;
+        }
+      }
+      for (const s of scripts) {
+        const src = s.src || "";
+        if (src.includes("/s/player/")) return src;
+      }
+      return null;
     } catch {
       return null;
     }
