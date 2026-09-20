@@ -23,18 +23,16 @@ import * as ort from "../lib/ort/ort.webgpu.min.mjs";
 import { DemucsProcessor } from "../lib/demucs-web/processor.js";
 import "../content/streamer.js"; // expose self.VocalisStreamer
 
-ort.env.wasm.wasmPaths = {
-  mjs: new URL("../lib/ort/ort-wasm-simd-threaded.jsep.mjs", import.meta.url).href,
-  wasm: new URL("../lib/ort/ort-wasm-simd-threaded.jsep.wasm", import.meta.url).href,
-};
+ort.env.wasm.wasmPaths = new URL("../lib/ort/", import.meta.url).href;
 const cores = typeof navigator !== "undefined" && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4;
 ort.env.wasm.numThreads = Math.min(8, cores);
+ort.env.wasm.simd = true;
 ort.env.logLevel = "error";
 
 const MODEL_URL =
   "https://huggingface.co/timcsy/demucs-web-onnx/resolve/main/htdemucs_embedded.onnx";
 const MODEL_ID = "htdemucs_embedded_v1";
-const SEG_S = 10;
+const SEG_S = 7.8;
 
 const post = (msg, transfer = []) => self.postMessage(msg, transfer);
 const log = (msg) => post({ type: "log", msg });
@@ -158,22 +156,72 @@ async function doEnsureReady() {
   log("modèle chargé depuis : " + source + " (" + Math.round(buf.byteLength / 1048576) + " Mo)");
 
   const t0 = performance.now();
-  processor = new DemucsProcessor({ ort });
-  try {
-    await processor.loadModel(buf);
-    backend = "webgpu";
-  } catch (gpuErr) {
-    log("WebGPU non disponible (" + (gpuErr?.message || gpuErr) + "), repli WASM…");
+  let adapterInfo = null;
+  let useWebGPU = false;
+
+  // 1. Détection adaptateur WebGPU (haute performance, discret / NVIDIA RTX)
+  if (typeof navigator !== "undefined" && navigator.gpu) {
+    try {
+      const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+      if (adapter) {
+        ort.env.webgpu.adapter = adapter;
+        ort.env.webgpu.powerPreference = "high-performance";
+        const info = adapter.info || {};
+        adapterInfo = info.description || info.device || info.architecture || "GPU haute performance";
+        log("Accélération matérielle détectée : " + adapterInfo + (info.vendor ? " (" + info.vendor + ")" : ""));
+        useWebGPU = true;
+      } else {
+        log("Adaptateur GPU non renvoyé par le navigateur (requestAdapter=null)");
+      }
+    } catch (e) {
+      log("Vérification GPU : " + (e?.message || e));
+    }
+  } else {
+    log("WebGPU non disponible dans le contexte Worker");
+  }
+
+  // 2. Initialisation WebGPU explicite
+  if (useWebGPU) {
+    try {
+      processor = new DemucsProcessor({
+        ort,
+        sessionOptions: {
+          executionProviders: [
+            {
+              name: "webgpu",
+              deviceType: "gpu",
+              powerPreference: "high-performance",
+            },
+          ],
+          graphOptimizationLevel: "all",
+          enableCpuMemArena: true,
+          enableMemPattern: true,
+        },
+      });
+      await processor.loadModel(buf);
+      backend = "webgpu";
+      log(`Session IA prête en ${Math.round(performance.now() - t0)} ms — WebGPU ACTIF (${adapterInfo || "GPU"})`);
+    } catch (gpuErr) {
+      log(`WebGPU a échoué (${gpuErr?.message || gpuErr}) -> bascule sur CPU WASM…`);
+      useWebGPU = false;
+    }
+  }
+
+  // 3. Repli WASM multi-cœurs
+  if (!useWebGPU) {
+    const threadCount = ort.env.wasm.numThreads || 4;
     processor = new DemucsProcessor({
       ort,
-      sessionOptions: { executionProviders: ["wasm"], graphOptimizationLevel: "basic" },
+      sessionOptions: {
+        executionProviders: ["wasm"],
+        graphOptimizationLevel: "all",
+        enableCpuMemArena: true,
+        enableMemPattern: true,
+      },
     });
     await processor.loadModel(buf);
     backend = "wasm";
-  }
-  log("session IA prête en " + Math.round(performance.now() - t0) + " ms — backend : " + backend);
-  if (backend === "wasm") {
-    log("ATTENTION : WebGPU indisponible, repli WASM (beaucoup plus lent).");
+    log(`Session IA prête en ${Math.round(performance.now() - t0)} ms — Mode CPU WASM (${threadCount} cœurs)`);
   }
 }
 
@@ -189,14 +237,17 @@ async function pumpSeg() {
   try {
     if (!skip.has(idx)) {
       const t0 = performance.now();
-      const res = await processor.separate(L, R);
+      const res = await processor.separate(L, R, { vocalsOnly: true });
+      const dt = Math.round(performance.now() - t0);
+      const audioSec = (L.length / 44100).toFixed(1);
+      const speedX = (audioSec / (dt / 1000)).toFixed(1);
       if (firstSep) {
         firstSep = false;
-        log("1er bloc de 10 s séparé en " + Math.round(performance.now() - t0) + " ms (" + backend + ")");
+        log(`1er bloc (${audioSec} s) séparé en ${dt} ms [${backend.toUpperCase()}] — vitesse ${speedX}× temps réel`);
       }
       doneCount++;
       post(
-        { type: "done", index: idx, left: res.vocals.left.buffer, right: res.vocals.right.buffer },
+        { type: "done", index: idx, left: res.vocals.left.buffer, right: res.vocals.right.buffer, backend, dt },
         [res.vocals.left.buffer, res.vocals.right.buffer]
       );
     }
@@ -238,12 +289,12 @@ self.onmessage = async (e) => {
   try {
     if (msg.type === "init") {
       await ensureReady();
-      post({ type: "ready" });
+      post({ type: "ready", backend, gpu: adapterInfo });
       pumpSeg();
     } else if (msg.type === "stream") {
       ensureReady()
         .then(() => {
-          post({ type: "ready" });
+          post({ type: "ready", backend, gpu: adapterInfo });
           pumpSeg();
         })
         .catch((e) => {
@@ -265,12 +316,13 @@ self.onmessage = async (e) => {
       }
       const left = new Float32Array(leftBuf);
       const right = new Float32Array(rightBuf);
-      log("IA : séparation du bloc " + (msg.index + 1) + " (" + left.length + " éch.)…");
+      const audioSec = (left.length / 44100).toFixed(1);
       const t0 = performance.now();
-      const res = await processor.separate(left, right);
+      const res = await processor.separate(left, right, { vocalsOnly: true });
       const dt = Math.round(performance.now() - t0);
+      const speedX = (parseFloat(audioSec) / (dt / 1000)).toFixed(1);
       doneCount++;
-      log("IA : bloc " + (msg.index + 1) + " terminé en " + dt + " ms (" + backend + ")");
+      log(`IA : bloc ${msg.index + 1} (${audioSec} s) terminé en ${dt} ms [${backend.toUpperCase()}] — vitesse ${speedX}× temps réel`);
       const leftResB64 = arrayBufferToBase64(res.vocals.left.buffer);
       const rightResB64 = arrayBufferToBase64(res.vocals.right.buffer);
       post({
@@ -278,6 +330,8 @@ self.onmessage = async (e) => {
         index: msg.index,
         leftB64: leftResB64,
         rightB64: rightResB64,
+        backend,
+        dt,
       });
     }
   } catch (err) {

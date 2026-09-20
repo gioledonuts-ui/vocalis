@@ -21,9 +21,9 @@
 self.VocalisEngine = (() => {
   "use strict";
 
-  const CHUNK = 10;                 // durée d'un bloc traité (s)
+  const CHUNK = 7.8;                // durée d'un bloc traité (s) (343 980 éch. = Demucs natif)
   const SR = 44100;                 // fréquence du modèle / de l'itag 140
-  const PRELOAD_S = 20;             // secondes de voix prêtes avant lecture (2 blocs)
+  const PRELOAD_S = 15.6;           // secondes de voix prêtes avant lecture (2 blocs)
   const SCHEDULE_AHEAD = 90;        // secondes d'audio programmées d'avance
   const MEM_WINDOW = 60;            // blocs gardés en RAM (~30 min)
   const CACHE_CAP = 1_500_000_000;  // plafond IndexedDB par vidéo (~1,5 Go)
@@ -614,6 +614,10 @@ self.VocalisEngine = (() => {
         this.phase("model", msg.pct, msg);
       } else if (msg.type === "ready") {
         this.workerReady = true;
+        this.backend = msg.backend || "inconnu";
+        this.gpuName = msg.gpu || null;
+        this.hooks.onLog &&
+          this.hooks.onLog("Moteur IA opérationnel : " + (this.backend === "webgpu" ? "WebGPU (" + (this.gpuName || "GPU") + ")" : "CPU WASM"));
         this.pump();
       } else if (msg.type === "stream-download") {
         this.downloadedSec = msg.seconds || 0;
@@ -668,8 +672,8 @@ self.VocalisEngine = (() => {
         if (!this.processed.has(i) && this.audio44) { idx = i; break; }
       }
       if (idx == null) return;
-      const start = idx * CHUNK * SR;
-      const len = Math.min(CHUNK * SR, this.audio44.left.length - start);
+      const start = Math.round(idx * CHUNK * SR);
+      const len = Math.min(Math.round(CHUNK * SR), this.audio44.left.length - start);
       if (len <= 0) { this.pump(); return; }
       this.workerBusy = true;
       this.workerBusySince = Date.now();
@@ -1154,6 +1158,8 @@ self.VocalisEngine = (() => {
         duration: this.duration,
         mode: this.mode,
         via: this.via || null,
+        backend: this.backend || null,
+        gpuName: this.gpuName || null,
         processedPct: this.nChunks ? Math.round((this.processed.size / this.nChunks) * 100) : 0,
       };
     }

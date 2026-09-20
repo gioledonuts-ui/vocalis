@@ -91,8 +91,16 @@ async function refresh() {
   btn.disabled = false;
   btn.classList.toggle("on", enabled);
 
-  if (st?.mode) {
-    if (specEngine) specEngine.textContent = "WebGPU";
+  if (st?.backend || st?.mode) {
+    if (specEngine) {
+      if (st.backend === "webgpu") {
+        specEngine.textContent = st.gpuName ? `WebGPU (${st.gpuName})` : "WebGPU (GPU)";
+      } else if (st.backend === "wasm") {
+        specEngine.textContent = "CPU WASM";
+      } else {
+        specEngine.textContent = "WebGPU";
+      }
+    }
   }
   if (st?.processedPct != null) {
     if (specBuffer) specBuffer.textContent = `${st.processedPct} %`;

@@ -24,7 +24,7 @@ self.VocalisStreamer = (() => {
   "use strict";
 
   const RANGE = 1024 * 1024;          // taille d'une tranche (1 Mo borné, accepté par tous les CDN)
-  const SEG = 10;                     // durée d'un segment émis (s)
+  const SEG = 7.8;                    // durée d'un segment émis (s) (aligné sur taille native Demucs)
   const SR = 44100;                   // fréquence native de l'itag 140
   const LOOKAHEAD_S = 90;             // avance max de téléchargement sur le traitement
 
@@ -59,8 +59,8 @@ self.VocalisStreamer = (() => {
 
       this.segIdx = 0;
       this.segPos = 0;
-      this.bufL = new Float32Array(SEG * SR);
-      this.bufR = new Float32Array(SEG * SR);
+      this.bufL = new Float32Array(Math.round(SEG * SR));
+      this.bufR = new Float32Array(Math.round(SEG * SR));
 
       this.processedSecondsGetter = () => 0;
     }
@@ -258,8 +258,8 @@ self.VocalisStreamer = (() => {
           this.hooks.onSegment && this.hooks.onSegment(this.segIdx, this.bufL, this.bufR);
           this.segIdx++;
           this.segPos = 0;
-          this.bufL = new Float32Array(SEG * SR);
-          this.bufR = new Float32Array(SEG * SR);
+          this.bufL = new Float32Array(Math.round(SEG * SR));
+          this.bufR = new Float32Array(Math.round(SEG * SR));
         }
       }
     }

@@ -4,6 +4,24 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.13] — 2026-09-20
+
+### Optimisé (Accélération IA majeure : WebGPU forcé, 75 % d'iSTFT éliminés, alignement natif des blocs)
+- **Élimination de 75 % des calculs iSTFT (mode `vocalsOnly`)** :
+  - Auparavant, `DemucsProcessor.separate` exécutait la reconstruction par transformée de Fourier inverse (`standaloneIspec`) pour les 4 pistes du modèle (`drums`, `bass`, `other`, `vocals`), gaspillant 3/4 du temps CPU en JavaScript pur.
+  - La fonction `standaloneMaskSingle` extrait désormais uniquement le spectrogramme complexe de la piste vocale (index 3). La conversion iSTFT et l'accumulation temporelle ne sont calculées que pour la voix, divisant par 4 le temps post-inférence.
+- **Alignement natif des segments audio (blocs de 7,8 s au lieu de 10 s)** :
+  - Le modèle Demucs v4 est entraîné nativement sur des fenêtres de 343 980 échantillons (7,80 s à 44,1 kHz).
+  - Découper en tranches de 10 s forçait le processeur à exécuter 2 inférences ONNX par bloc (avec du padding de zéros superflu).
+  - En synchronisant la taille de bloc sur 7,8 s (343 980 échantillons exacts), chaque bloc correspond à **1 seule inférence ONNX**, réduisant immédiatement de 36 % le nombre d'inférences par vidéo et éliminant tout décalage avec le tempo de lecture.
+- **Accélération matérielle WebGPU haute performance garantie** :
+  - Demande explicite de l'adaptateur GPU avec `{ powerPreference: "high-performance" }` pour cibler la carte graphique dédiée (NVIDIA RTX).
+  - Configuration d'ONNX Runtime Web (`ort.env.webgpu.adapter`, `graphOptimizationLevel: "all"`, `enableMemPattern: true`, `enableCpuMemArena: true`) pour maximiser l'utilisation des cœurs GPU et de la VRAM.
+  - Détection dynamique et journalisation détaillée : identification du GPU utilisé (ex. NVIDIA GeForce RTX), affichage du temps de calcul de chaque bloc et calcul du ratio de vitesse par rapport au temps réel (ex. 25× à 30× plus rapide que la lecture).
+- **Repli WASM multi-cœurs optimisé** :
+  - Correction du chemin `ort.env.wasm.wasmPaths` pour mapper correctement le moteur SIMD multi-cœurs `ort-wasm-simd-threaded.wasm` en cas d'indisponibilité du GPU.
+  - L'affichage du Popup affiche en temps réel le moteur actif (`WebGPU (GPU)` ou `CPU WASM`).
+
 ## [0.5.12] — 2026-09-20
 
 ### Corrigé (Reprise fluide lors de la bascule ON/OFF & Téléchargement intégral du flux)

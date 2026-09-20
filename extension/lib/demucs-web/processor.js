@@ -42,6 +42,35 @@ export function standaloneMask(freqOutput) {
 }
 
 /**
+ * Convert model frequency output to complex spectrogram for a single track (optimization)
+ */
+export function standaloneMaskSingle(freqOutput, trackIdx = 3) {
+  const numChannels = 4;
+  const numBins = MODEL_SPEC_BINS;
+  const numFrames = MODEL_SPEC_FRAMES;
+
+  const trackSpec = {
+    leftReal: new Float32Array(numBins * numFrames),
+    leftImag: new Float32Array(numBins * numFrames),
+    rightReal: new Float32Array(numBins * numFrames),
+    rightImag: new Float32Array(numBins * numFrames)
+  };
+
+  const baseIdx = trackIdx * numChannels * numBins * numFrames;
+  for (let f = 0; f < numFrames; f++) {
+    for (let b = 0; b < numBins; b++) {
+      const outIdx = b * numFrames + f;
+      trackSpec.leftReal[outIdx] = freqOutput[baseIdx + 0 * numBins * numFrames + b * numFrames + f];
+      trackSpec.leftImag[outIdx] = freqOutput[baseIdx + 1 * numBins * numFrames + b * numFrames + f];
+      trackSpec.rightReal[outIdx] = freqOutput[baseIdx + 2 * numBins * numFrames + b * numFrames + f];
+      trackSpec.rightImag[outIdx] = freqOutput[baseIdx + 3 * numBins * numFrames + b * numFrames + f];
+    }
+  }
+
+  return trackSpec;
+}
+
+/**
  * Convert complex spectrogram back to time domain (iSTFT with proper offsets)
  */
 export function standaloneIspec(trackSpec, targetLength) {
@@ -193,23 +222,27 @@ export class DemucsProcessor {
 
     const defaultSessionOptions = {
       executionProviders: ['webgpu', 'wasm'],
-      graphOptimizationLevel: 'basic'
+      graphOptimizationLevel: 'all',
+      enableCpuMemArena: true,
+      enableMemPattern: true
     };
 
-    this.session = await this.ort.InferenceSession.create(modelBuffer, {
-      ...defaultSessionOptions,
-      ...this.sessionOptions
-    });
+    const finalOptions = Object.keys(this.sessionOptions).length
+      ? this.sessionOptions
+      : defaultSessionOptions;
+
+    this.session = await this.ort.InferenceSession.create(modelBuffer, finalOptions);
 
     this.onLog('model', 'Model loaded successfully');
     return this.session;
   }
 
-  async separate(leftChannel, rightChannel) {
+  async separate(leftChannel, rightChannel, options = {}) {
     if (!this.session) {
       throw new Error('Model not loaded. Call loadModel() first.');
     }
 
+    const vocalsOnly = options.vocalsOnly !== false;
     const totalSamples = leftChannel.length;
     const stride = Math.floor(TRAINING_SAMPLES * (1 - SEGMENT_OVERLAP));
     const numSegments = Math.ceil((totalSamples - TRAINING_SAMPLES) / stride) + 1;
@@ -265,31 +298,57 @@ export class DemucsProcessor {
       }
 
       let combinedOutputs = null;
-      if (freqData) {
-        const trackSpecs = standaloneMask(freqData);
-        combinedOutputs = [];
+      let vocalsOnlyCombined = null;
 
-        for (let t = 0; t < 4; t++) {
-          const freqOutput = standaloneIspec(trackSpecs[t], TRAINING_SAMPLES);
+      if (freqData) {
+        if (vocalsOnly) {
+          // Optimisation majeure : on ne reconstruit QUE la piste voix (index 3)
+          const vocalsSpec = standaloneMaskSingle(freqData, 3);
+          const freqOutput = standaloneIspec(vocalsSpec, TRAINING_SAMPLES);
           const numChannels = timeShape[2];
           const samples = timeShape[3];
           const timeLeft = new Float32Array(samples);
           const timeRight = new Float32Array(samples);
 
           for (let i = 0; i < samples; i++) {
-            timeLeft[i] = timeData[t * numChannels * samples + 0 * samples + i];
-            timeRight[i] = timeData[t * numChannels * samples + 1 * samples + i];
+            timeLeft[i] = timeData[3 * numChannels * samples + 0 * samples + i];
+            timeRight[i] = timeData[3 * numChannels * samples + 1 * samples + i];
           }
 
-          const combined = {
+          vocalsOnlyCombined = {
             left: new Float32Array(samples),
             right: new Float32Array(samples)
           };
           for (let i = 0; i < samples; i++) {
-            combined.left[i] = timeLeft[i] + (freqOutput.left[i] || 0);
-            combined.right[i] = timeRight[i] + (freqOutput.right[i] || 0);
+            vocalsOnlyCombined.left[i] = timeLeft[i] + (freqOutput.left[i] || 0);
+            vocalsOnlyCombined.right[i] = timeRight[i] + (freqOutput.right[i] || 0);
           }
-          combinedOutputs.push(combined);
+        } else {
+          const trackSpecs = standaloneMask(freqData);
+          combinedOutputs = [];
+
+          for (let t = 0; t < 4; t++) {
+            const freqOutput = standaloneIspec(trackSpecs[t], TRAINING_SAMPLES);
+            const numChannels = timeShape[2];
+            const samples = timeShape[3];
+            const timeLeft = new Float32Array(samples);
+            const timeRight = new Float32Array(samples);
+
+            for (let i = 0; i < samples; i++) {
+              timeLeft[i] = timeData[t * numChannels * samples + 0 * samples + i];
+              timeRight[i] = timeData[t * numChannels * samples + 1 * samples + i];
+            }
+
+            const combined = {
+              left: new Float32Array(samples),
+              right: new Float32Array(samples)
+            };
+            for (let i = 0; i < samples; i++) {
+              combined.left[i] = timeLeft[i] + (freqOutput.left[i] || 0);
+              combined.right[i] = timeRight[i] + (freqOutput.right[i] || 0);
+            }
+            combinedOutputs.push(combined);
+          }
         }
       }
 
@@ -304,20 +363,38 @@ export class DemucsProcessor {
         overlapWindow[i] = Math.min(fadeIn, fadeOut);
       }
 
-      for (let t = 0; t < numTracks; t++) {
+      if (vocalsOnly) {
+        // Traitement vocal accéléré : seulement la piste 3 (voix)
         for (let i = 0; i < segmentLength && start + i < totalSamples; i++) {
           let leftVal, rightVal;
-          if (combinedOutputs) {
-            leftVal = combinedOutputs[t].left[i];
-            rightVal = combinedOutputs[t].right[i];
+          if (vocalsOnlyCombined) {
+            leftVal = vocalsOnlyCombined.left[i];
+            rightVal = vocalsOnlyCombined.right[i];
           } else {
-            const leftIdx = t * numChannels * samples + 0 * samples + i;
-            const rightIdx = t * numChannels * samples + 1 * samples + i;
+            const leftIdx = 3 * numChannels * samples + 0 * samples + i;
+            const rightIdx = 3 * numChannels * samples + 1 * samples + i;
             leftVal = timeData[leftIdx];
             rightVal = timeData[rightIdx];
           }
-          outputs[t].left[start + i] += leftVal * overlapWindow[i];
-          outputs[t].right[start + i] += rightVal * overlapWindow[i];
+          outputs[3].left[start + i] += leftVal * overlapWindow[i];
+          outputs[3].right[start + i] += rightVal * overlapWindow[i];
+        }
+      } else {
+        for (let t = 0; t < numTracks; t++) {
+          for (let i = 0; i < segmentLength && start + i < totalSamples; i++) {
+            let leftVal, rightVal;
+            if (combinedOutputs) {
+              leftVal = combinedOutputs[t].left[i];
+              rightVal = combinedOutputs[t].right[i];
+            } else {
+              const leftIdx = t * numChannels * samples + 0 * samples + i;
+              const rightIdx = t * numChannels * samples + 1 * samples + i;
+              leftVal = timeData[leftIdx];
+              rightVal = timeData[rightIdx];
+            }
+            outputs[t].left[start + i] += leftVal * overlapWindow[i];
+            outputs[t].right[start + i] += rightVal * overlapWindow[i];
+          }
         }
       }
 
@@ -334,6 +411,7 @@ export class DemucsProcessor {
     }
 
     for (let t = 0; t < TRACKS.length; t++) {
+      if (vocalsOnly && t !== 3) continue;
       for (let i = 0; i < totalSamples; i++) {
         if (weights[i] > 0) {
           outputs[t].left[i] /= weights[i];

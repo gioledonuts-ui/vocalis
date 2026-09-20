@@ -560,6 +560,8 @@
         processedPct: state.engine?.status().processedPct ?? null,
         via: state.engine?.status().via ?? null,
         mode: state.engine?.status().mode ?? null,
+        backend: state.engine?.status().backend ?? null,
+        gpuName: state.engine?.status().gpuName ?? null,
         journal: state.journal.slice(-14),
       });
     }
