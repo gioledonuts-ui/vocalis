@@ -23,7 +23,7 @@ self.VocalisEngine = (() => {
 
   const CHUNK = 10;                 // durée d'un bloc traité (s)
   const SR = 44100;                 // fréquence du modèle / de l'itag 140
-  const PRELOAD_S = 10;             // secondes de voix prêtes avant lecture
+  const PRELOAD_S = 20;             // secondes de voix prêtes avant lecture (2 blocs)
   const SCHEDULE_AHEAD = 90;        // secondes d'audio programmées d'avance
   const MEM_WINDOW = 60;            // blocs gardés en RAM (~30 min)
   const CACHE_CAP = 1_500_000_000;  // plafond IndexedDB par vidéo (~1,5 Go)
@@ -505,10 +505,11 @@ self.VocalisEngine = (() => {
         probe.close();
       }
       if (this.aborted) return;
-      if (!this.duration || decoded.duration < this.duration) {
+      if (!this.duration) {
         this.duration = decoded.duration;
         this.nChunks = Math.max(1, Math.ceil(this.duration / CHUNK));
       }
+      this.audioDuration = decoded.duration;
 
       this.phase("resample");
       let left, right;
@@ -659,6 +660,18 @@ self.VocalisEngine = (() => {
 
       this.hooks.onProcessed && this.hooks.onProcessed(this.ranges(), this.duration);
 
+      // Si la vidéo attendait ce bloc précis pour reprendre la lecture
+      const curVidChunk = Math.floor(this.video.currentTime / CHUNK);
+      if (this.stalled && curVidChunk === idx) {
+        this.stalled = false;
+        this.hooks.onStallClear && this.hooks.onStallClear();
+        if (this.pausedForStall && this.video.paused) {
+          this.pausedForStall = false;
+          this.video.play().catch(() => {});
+        }
+        this.reschedule();
+      }
+
       if (!this.started) {
         const ready = this.processed.size * CHUNK;
         this.phase("prepare", Math.min(100, Math.round((ready / PRELOAD_S) * 100)));
@@ -683,7 +696,7 @@ self.VocalisEngine = (() => {
         const ok = i < this.nChunks && this.processed.has(i);
         if (ok && s === null) s = i * CHUNK;
         if (!ok && s !== null) {
-          out.push([s, i * CHUNK]);
+          out.push([s, Math.min(i * CHUNK, this.duration)]);
           s = null;
         }
       }
@@ -824,22 +837,39 @@ self.VocalisEngine = (() => {
         case "play":
         case "playing":
         case "seeked": {
-          this.stalled = false;
           if (this.ctx && this.ctx.state === "suspended") {
             this.ctx.resume().catch(() => {});
-          }
-          if (this.active) {
-            if (!this.video.muted) this.video.muted = true;
-            try {
-              const p = document.getElementById("movie_player");
-              if (p && typeof p.mute === "function" && typeof p.isMuted === "function" && !p.isMuted()) {
-                p.mute();
-              }
-            } catch {}
           }
           const t = this.video.currentTime;
           const idx = Math.floor(t / CHUNK);
           this.setPriorityIncr(idx);
+
+          if (this.active) {
+            if (!this.processed.has(idx)) {
+              this.stopSources();
+              if (!this.video.paused) {
+                this.video.pause();
+                this.pausedForStall = true;
+              }
+              this.stalled = true;
+              this.hooks.onStall &&
+                this.hooks.onStall(Math.round((this.processed.size / this.nChunks) * 100));
+              return;
+            } else {
+              if (this.stalled) {
+                this.stalled = false;
+                this.hooks.onStallClear && this.hooks.onStallClear();
+                this.pausedForStall = false;
+              }
+              if (!this.video.muted) this.video.muted = true;
+              try {
+                const p = document.getElementById("movie_player");
+                if (p && typeof p.mute === "function" && typeof p.isMuted === "function" && !p.isMuted()) {
+                  p.mute();
+                }
+              } catch {}
+            }
+          }
           if (this.video.playbackRate === 1) this.reschedule();
           break;
         }
@@ -943,14 +973,46 @@ self.VocalisEngine = (() => {
         }
 
         const cur = Math.floor(this.video.currentTime / CHUNK);
+
+        // Si la vidéo avance au-delà de l'audio qui a pu être extrait :
+        if (this.audioDuration && cur * CHUNK >= this.audioDuration && this.audioDuration < this.duration - 5) {
+          if (!this.streamEndNoticeShown) {
+            this.streamEndNoticeShown = true;
+            this.hooks.onNotice &&
+              this.hooks.onNotice(`Fin du flux extrait (${Math.round(this.audioDuration)} s) : son original rétabli.`);
+          }
+          this.stopSources();
+          this.video.muted = false;
+          try {
+            const p = document.getElementById("movie_player");
+            if (p && typeof p.unMute === "function") p.unMute();
+          } catch {}
+          return;
+        }
+
         if (!this.processed.has(cur)) {
           this.stopSources();
+          if (!this.video.paused && !this.stalled) {
+            this.video.pause();
+            this.pausedForStall = true;
+          }
+          this.stalled = true;
           this.setPriorityIncr(cur);
           this.hooks.onStall &&
             this.hooks.onStall(Math.round((this.processed.size / this.nChunks) * 100));
           return;
         }
-        this.hooks.onStallClear && this.hooks.onStallClear();
+
+        if (this.stalled) {
+          this.stalled = false;
+          this.hooks.onStallClear && this.hooks.onStallClear();
+          if (this.pausedForStall && this.video.paused) {
+            this.pausedForStall = false;
+            this.video.play().catch(() => {});
+          }
+          this.reschedule();
+          return;
+        }
 
         // Si aucune source n'est active alors que le bloc courant est prêt, on replanifie
         if (this.sources.length === 0 && !this.video.paused) {

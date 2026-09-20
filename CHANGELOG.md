@@ -4,6 +4,19 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.11] — 2026-09-20
+
+### Corrigé (Pause automatique en zone non traitée et justesse de la barre de progression)
+- **Pause automatique pour éliminer la lecture en silence** :
+  - Lorsque la lecture vidéo rattrape la zone en cours de traitement (ou lors d'un saut dans une zone non encore calculée), la vidéo est immédiatement mise en pause (`video.pause()`) avec affichage de l'overlay de chargement rapide ("Traitement de cette zone…").
+  - Dès que le bloc manquant est séparé par le GPU (~400 ms), l'overlay disparaît, la vidéo repart automatiquement (`video.play()`) et la voix reprend en synchronisation parfaite. Zéro lecture en silence.
+- **Justesse absolue de la barre de progression violette (Buffer bar)** :
+  - L'échelle de la barre tampon utilise désormais strictement la durée totale réelle de la vidéo YouTube (`videoDuration`), évitant qu'un flux partiel de 60 s ne remplisse faussement 100 % de la barre. La zone violette indique exactement les secondes réellement prêtes.
+- **Pré-chargement initial augmenté à 20 secondes (2 blocs)** :
+  - L'avance initiale de 20 s donne une marge confortable au GPU RTX (qui tourne à ~25× la vitesse réelle) pour calculer tout le reste de la vidéo sans jamais se faire rattraper pendant la lecture normale.
+- **Sécurité fin de flux partiel** :
+  - Si un flux n'a pu être téléchargé que partiellement, le son YouTube d'origine est automatiquement rétabli dès que la vidéo dépasse la fin de l'audio extrait, sans blocage infini.
+
 ## [0.5.10] — 2026-09-20
 
 ### Corrigé (Cause racine des blocs traités en 0 ms et client TVHTML5)
