@@ -120,60 +120,54 @@ self.VocalisEngine = (() => {
       return audio[0];
     }
 
-    async resolveAudioSource(pr, videoId) {
+    async resolveAudioSources(pr, videoId) {
       const log = (m) => this.hooks.onLog && this.hooks.onLog(m);
-      const out = { m4a: null, best: null, via: "page" };
+      const candidates = [];
 
-      if (pr) {
-        const fmts = pr?.streamingData?.adaptiveFormats || [];
-        const pageAudio = fmts.filter((f) => (f.mimeType || "").startsWith("audio/"));
-        const withUrl = pageAudio.filter((f) => f.url);
-        log("flux page : " + pageAudio.length + " formats audio, " +
-            withUrl.length + " avec URL directe");
-
-        out.m4a = this.pickAudio(pr, "audio/mp4");
-        out.best = this.pickAudio(pr, "audio/");
-        if (out.best) return out;
-      }
-
-      log("recherche du flux via l'API Innertube (VisionOS / Android)…");
-      const apiKey = this.extras?.apiKey || "AIzaSyAO_FJ2SlqU8Q4STEHLNlTpqUcavnZbsC8";
-      const targetId = videoId || pr?.videoDetails?.videoId;
-      let it = null;
-      try {
-        it = await withTimeout(
-          VocalisInnertube.query(targetId, apiKey, log), 20000, "innertube"
-        );
-      } catch (e) {
-        log("innertube : échec global (" + (e?.message || e) + ")");
-      }
-      if (it) {
-        const f = (list) =>
-          list.sort((a, b) => (b.bitrate || b.averageBitrate || 0) - (a.bitrate || a.averageBitrate || 0))[0];
-        out.m4a = f(it.formats.filter((x) => (x.mimeType || "").startsWith("audio/mp4"))) || null;
-        out.best = f(it.formats);
-        out.via = it.client;
-        out.ua = it.userAgent;
-        if (out.best) return out;
-      }
-
-      const jsUrl = this.extras?.playerJsUrl;
       const fmts = pr?.streamingData?.adaptiveFormats || [];
       const pageAudio = fmts.filter((f) => (f.mimeType || "").startsWith("audio/"));
-      if (jsUrl && pageAudio.length) {
-        // base.js principal, puis variante ES5 (syntaxe classique que notre
-        // mini-bundler comprend à coup sûr) si le premier ne résout rien.
+      log("flux page : " + pageAudio.length + " formats audio");
+
+      // 1. Déchiffrement du flux natif de la page (prioritaire : le flux du lecteur web n'a AUCUNE limite de 1 Mo)
+      const jsUrl = this.extras?.playerJsUrl;
+      const ciphers = pageAudio.filter((f) => f.signatureCipher);
+      if (jsUrl && ciphers.length) {
+        log("déchiffrement : analyse des " + ciphers.length + " formats signés…");
         const variants = [jsUrl];
         const es5 = jsUrl.replace("/player_ias.vflset/", "/player_ias_es5.vflset/");
         if (es5 !== jsUrl) variants.push(es5);
         for (const v of variants) {
-          const solved = await this.tryDecipher(v, pageAudio, out, log);
-          if (solved) return solved;
+          const solved = await this.tryDecipher(v, ciphers, { m4a: null, best: null }, log);
+          if (solved && solved.best) {
+            candidates.push({ format: solved.best, via: "déchiffrement", ua: null });
+            break;
+          }
         }
-      } else {
-        log("base.js introuvable ou aucun format à déchiffrer");
       }
-      return out;
+
+      // 2. Direct dans la page (si présent sans chiffrement)
+      const direct = this.pickAudio(pr, "audio/");
+      if (direct && direct.url) {
+        candidates.push({ format: direct, via: "page-direct", ua: null });
+      }
+
+      // 3. Recherche Innertube (VisionOS, TVHTML5, Android...)
+      log("recherche de flux via Innertube…");
+      const apiKey = this.extras?.apiKey || "AIzaSyAO_FJ2SlqU8Q4STEHLNlTpqUcavnZbsC8";
+      const targetId = videoId || pr?.videoDetails?.videoId;
+      try {
+        const it = await withTimeout(
+          VocalisInnertube.query(targetId, apiKey, log), 15000, "innertube"
+        );
+        if (it && it.formats && it.formats.length) {
+          const sorted = it.formats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+          candidates.push({ format: sorted[0], via: it.client, ua: it.userAgent });
+        }
+      } catch (e) {
+        log("innertube : échec (" + (e?.message || e) + ")");
+      }
+
+      return candidates;
     }
 
     async tryDecipher(jsUrl, pageAudio, out, log) {
@@ -240,47 +234,32 @@ self.VocalisEngine = (() => {
       this.nChunks = Math.max(1, Math.ceil(this.duration / CHUNK));
       this.cacheEnabled = this.nChunks * CHUNK * SR * 2 * 2 <= CACHE_CAP;
 
-      let src;
+      /* Worker IA : créé maintenant, initialisé EN PARALLÈLE du flux */
+      this.phase("model");
+      this.hooks.onLog && this.hooks.onLog("lancement du worker IA…");
+      this.spawnWorker();
+
+      let candidates;
       try {
-        src = await this.resolveAudioSource(pr, videoId);
+        candidates = await this.resolveAudioSources(pr, videoId);
       } catch (e) {
         this.hooks.onLog && this.hooks.onLog("ERREUR recherche de flux : " + (e?.message || e));
         this.hooks.onError &&
           this.hooks.onError("Impossible de trouver le flux audio (" + (e?.message || "erreur") + ").");
         return;
       }
-      this.via = src.via;
-      this.hooks.onLog && this.hooks.onLog("flux audio obtenu via : " + src.via);
-      if (!src.best) {
+
+      if (!candidates.length) {
         this.hooks.onError &&
           this.hooks.onError(
-            "Aucun flux audio utilisable (couches testées : page, innertube, déchiffrement). " +
-              "Vidéo protégée, ou YouTube a changé ses verrous — signale-le avec ce message."
+            "Aucun flux audio utilisable (couches testées : déchiffrement page, direct, innertube)."
           );
         return;
       }
       this.videoId = videoId;
 
-      /* Worker IA : créé maintenant, initialisé EN PARALLÈLE du flux */
-      this.phase("model");
-      this.hooks.onLog && this.hooks.onLog("lancement du worker IA…");
-      this.spawnWorker();
-
-      // mp4box vit DANS le worker (module ES) : ici on ne vérifie que
-      // WebCodecs ; si le worker n'a pas mp4box, il émettra stream-error.
-      const incrOk = src.m4a && typeof AudioDecoder !== "undefined";
-      this.streamUA = src.ua || null;
-      this.hooks.onLog && this.hooks.onLog("WebCodecs dispo (page) : " +
-        (typeof AudioDecoder !== "undefined"));
-
-      if (src.ua) {
-        await chrome.runtime
-          .sendMessage({ type: "vocalis:set-stream-ua", ua: src.ua })
-          .catch(() => {});
-      }
-
       this.mode = "legacy";
-      await this.startPipelineAudio(src.best);
+      await this.startPipelineAudio(candidates);
       if (this.aborted || this.fatal) return;
 
       if (this.started) this.hooks.onReady && this.hooks.onReady(this.duration);
@@ -375,21 +354,41 @@ self.VocalisEngine = (() => {
       return combined.buffer;
     }
 
-    async startPipelineAudio(fmt) {
+    async startPipelineAudio(candidates) {
       this.phase("download", 0);
-      let arrayBuf;
-      try {
-        arrayBuf = await this.downloadFullAudio(fmt.url);
-        if (!arrayBuf || this.aborted) return;
-      } catch (e) {
-        if (this.aborted) return;
+      let arrayBuf = null;
+      let successVia = null;
+
+      for (const cand of candidates) {
+        this.via = cand.via;
+        this.hooks.onLog && this.hooks.onLog("tentative téléchargement via : " + cand.via);
+        if (cand.ua) {
+          await chrome.runtime
+            .sendMessage({ type: "vocalis:set-stream-ua", ua: cand.ua })
+            .catch(() => {});
+        }
+        try {
+          arrayBuf = await this.downloadFullAudio(cand.format.url);
+          if (arrayBuf && arrayBuf.byteLength > 64000) {
+            successVia = cand.via;
+            break;
+          }
+        } catch (e) {
+          this.hooks.onLog &&
+            this.hooks.onLog("échec via " + cand.via + " (" + (e?.message || e) + "), essai suivant…");
+        }
+      }
+
+      if (!arrayBuf) {
         this.fatal = true;
-        this.hooks.onLog &&
-          this.hooks.onLog("ERREUR téléchargement : " + (e?.message || e));
         this.hooks.onError &&
-          this.hooks.onError("Téléchargement de l'audio impossible (" + (e?.message || e) + ").");
+          this.hooks.onError("Impossible de télécharger le flux audio (toutes les sources ont échoué).");
         return;
       }
+
+      this.via = successVia;
+      this.hooks.onLog && this.hooks.onLog("audio téléchargé avec succès via : " + successVia);
+
       if (this.aborted) return;
 
       this.phase("decode");

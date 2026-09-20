@@ -4,6 +4,22 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.4] — 2026-09-20
+
+### Corrigé (Cause racine du blocage à 1 Mo)
+- **Élimination de la bride 1 Mo YouTube** :
+  - Les flux mobiles Android sans PO-token sont désormais bridés à 1 Mo
+    par les serveurs CDN de YouTube (HTTP 403 dès la 2e tranche).
+  - Le pipeline priorise désormais le **déchiffrement des flux natifs du lecteur Web**
+    (`signatureCipher` via `cipher.js`) qui n'ont **AUCUNE restriction de 1 Mo**
+    et autorisent le téléchargement de la totalité de la vidéo sans coupure.
+  - Système multi-sources en cascade : si une source est interrompue ou bridée,
+    le pipeline bascule automatiquement et de manière transparente sur la source suivante.
+- **Réinsertion garantie du bouton YouTube** :
+  - Correction de la détection du bouton lors des navigations SPA : si la barre
+    des contrôles est reconstruite par YouTube, l'ancien bouton détaché est nettoyé
+    et réinséré immédiatement à gauche de l'engrenage des paramètres.
+
 ## [0.5.3] — 2026-09-20
 
 ### Corrigé

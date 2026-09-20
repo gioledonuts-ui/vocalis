@@ -10,12 +10,24 @@
 self.VocalisInnertube = (() => {
   "use strict";
 
-  /* Clients alignés sur l'état de l'art 2026 (yt-dlp) :
-     1. VISIONOS : client par défaut de yt-dlp, URLs directes et tranches Range
-        illimitées sans compte ni PO-token.
-     2. ANDROID « sdkless » : URLs directes (nécessite tranches bornées < 1 Mo).
-     3. ANDROID_VR & IOS & TVHTML5 : filets de sécurité. */
+  /* Clients alignés sur l'état de l'art 2026 :
+     1. TVHTML5 & IOS : flux complets sans limite 1 Mo.
+     2. VISIONOS : direct si disponible (sinon LOGIN_REQUIRED).
+     3. ANDROID : repli mobile. */
   const CLIENTS = [
+    {
+      clientName: "TVHTML5",
+      clientVersion: "7.20250630.19.00",
+      userAgent:
+        "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version YouTubeTV/7.20250630.19.00",
+    },
+    {
+      clientName: "IOS",
+      clientVersion: "19.09.37",
+      deviceModel: "iPhone14,3",
+      userAgent:
+        "com.google.ios.youtube/19.09.37 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)",
+    },
     {
       clientName: "VISIONOS",
       clientVersion: "1.02",
@@ -29,27 +41,7 @@ self.VocalisInnertube = (() => {
     {
       clientName: "ANDROID",
       clientVersion: "20.10.38",
-      // pas d'androidSdkVersion volontairement (« sdkless »)
       userAgent: "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip",
-    },
-    {
-      clientName: "ANDROID_VR",
-      clientVersion: "1.61",
-      androidSdkVersion: 32,
-      userAgent: "com.google.android.youtube.tvvr/1.61 (Linux; U; Android 12L) gzip",
-    },
-    {
-      clientName: "IOS",
-      clientVersion: "19.09.37",
-      deviceModel: "iPhone14,3",
-      userAgent:
-        "com.google.ios.youtube/19.09.37 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)",
-    },
-    {
-      clientName: "TVHTML5",
-      clientVersion: "7.20250630.19.00",
-      userAgent:
-        "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version YouTubeTV/7.20250630.19.00",
     },
   ];
 

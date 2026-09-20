@@ -61,6 +61,10 @@
       updatePlayerButton();
       return;
     }
+    if (btn) {
+      btn.remove();
+      btn = null;
+    }
 
     if (!btn) {
       btn = document.createElement("button");
@@ -96,11 +100,8 @@
     }
 
     const settingsBtn = rightControls.querySelector(".ytp-settings-button");
-    const subsBtn = rightControls.querySelector(".ytp-subtitles-button");
-    const target = subsBtn || settingsBtn;
-
-    if (target && target.parentNode === rightControls) {
-      rightControls.insertBefore(btn, target);
+    if (settingsBtn && settingsBtn.parentNode === rightControls) {
+      rightControls.insertBefore(btn, settingsBtn);
     } else {
       rightControls.prepend(btn);
     }
