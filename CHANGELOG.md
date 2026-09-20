@@ -4,6 +4,39 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.12] — 2026-09-20
+
+### Corrigé (Reprise fluide lors de la bascule ON/OFF & Téléchargement intégral du flux)
+- **Reprise immédiate de la file IA lors de la réactivation** :
+  - La désactivation temporaire de Vocalis (pour comparer avec/sans musique) ne bloque plus le traitement en tâche de fond.
+  - Lors de la réactivation, `activate()` recalcule et repriorise immédiatement la file de traitement IA à partir de la position vidéo courante (`cur`), et relance `this.pump()`.
+  - Le watchdog audio ne s'arrête plus en silence lors des pauses ou des micro-buffering (`stalled`) : il continue de surveiller l'état des blocs prioritaires et relance automatiquement la lecture dès que le bloc manquant est prêt.
+  - La méthode `setEnabled` attend la promesse d'activation pour garantir que l'AudioContext et la mise en sourdine YouTube sont verrouillés avant de reprendre la lecture.
+- **Téléchargement audio complet sans bride de 1 Mo** :
+  - `downloadFullAudio` intègre désormais le téléchargement direct du flux complet via le service worker (`vocalis:fetch-full-audio`) et le streaming continu (`getReader()`), éliminant définitivement la bride de 1 Mo causée par les Range headers et garantissant le téléchargement intégral de la vidéo.
+
+### Ajouté (Nouvelle identité visuelle, Nouveau logo & Refonte graphique complète)
+- **Identité visuelle propre et nouveau logo Vocalis** :
+  - Création originale d'un logo moderne (monogramme "V" futuriste entrelacé d'ondes sonores néon violet et cyan).
+  - Génération des icônes d'extension haute définition (16x16, 32x32, 48x48, 128x128).
+  - Nouveau bouton intégré dans le lecteur YouTube (.ytp-right-controls) reprenant le logo SVG avec halo dynamique actif/veille/chargement.
+- **Expérience de chargement multi-étapes intuitive** :
+  - Nouvel overlay glassmorphic affichant un stepper visuel à 3 étapes :
+    1. Acquisition du flux audio YouTube (avec jauge et débit Ko/Mo).
+    2. Initialisation du modèle IA Demucs v4 (accélération GPU RTX / WebGPU).
+    3. Isolation vocale & pré-chargement (progression en direct jusqu'au démarrage automatique).
+  - Égaliseur visuel animé en temps réel pendant le traitement.
+  - Bouton « Annuler » toujours accessible sans bloquer les commandes YouTube.
+- **Nouvelle barre de chargement (Buffer bar)** :
+  - Barre lumineuse à gradient violet/cyan avec animation de brillance (shimmer).
+  - Tooltip dynamique au survol affichant le pourcentage précis et la durée déjà traitée sans musique.
+- **Refonte graphique du Popup** :
+  - Design sombre glassmorphic ultra-moderne avec badge logo HD.
+  - Indicateur de statut avec point LED dynamique (actif, en cours, erreur).
+  - Stepper visuel à 3 étapes synchronisé.
+  - Grille de badges en temps réel (Moteur WebGPU, Mémoire tampon, 100% Local).
+  - Bouton Studio local et journal d'activité repliable.
+
 ## [0.5.11] — 2026-09-20
 
 ### Corrigé (Pause automatique en zone non traitée et justesse de la barre de progression)

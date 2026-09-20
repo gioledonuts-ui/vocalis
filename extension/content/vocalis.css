@@ -1,19 +1,23 @@
 /* ============================================================
-   Vocalis — styles injectés sur les pages YouTube
+   Vocalis — Design System & Styles injectés sur YouTube
    ============================================================ */
 
 :root {
-  --vocalis-bg: #14121f;
-  --vocalis-card: #1e1b2ee6;
-  --vocalis-border: #322d4a;
-  --vocalis-text: #ece9f7;
-  --vocalis-muted: #9a93b8;
-  --vocalis-accent: #8b5cf6;
-  --vocalis-accent-2: #22d3ee;
+  --voc-bg: #0c0a14;
+  --voc-card: rgba(16, 14, 28, 0.94);
+  --voc-border: rgba(167, 139, 250, 0.22);
+  --voc-border-active: rgba(34, 211, 238, 0.45);
+  --voc-text: #f3f0fa;
+  --voc-muted: #9e96bd;
+  --voc-accent: #8b5cf6;
+  --voc-accent-bright: #c084fc;
+  --voc-cyan: #06b6d4;
+  --voc-cyan-bright: #22d3ee;
+  --voc-success: #10b981;
 }
 
 /* ------------------------------------------------------------
-   Overlay de chargement (posé sur le lecteur vidéo)
+   Overlay de chargement multi-étapes (posé sur le lecteur)
    ------------------------------------------------------------ */
 #vocalis-overlay {
   position: absolute;
@@ -22,145 +26,358 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 8, 18, 0.6);
-  backdrop-filter: blur(2px);
-  font-family: "Segoe UI", system-ui, sans-serif;
-  /* Ne bloque PAS la page : les contrôles YouTube restent cliquables
-     autour de la carte, et le bouton Annuler est toujours là. */
+  background: rgba(8, 6, 16, 0.65);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.25s ease;
+}
+
+#vocalis-overlay.fade-out {
+  opacity: 0;
 }
 
 #vocalis-overlay .vocalis-card {
   pointer-events: auto;
-  width: min(420px, 82%);
-  padding: 28px 30px;
-  border-radius: 16px;
-  background: var(--vocalis-card);
-  border: 1px solid var(--vocalis-border);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
-  color: var(--vocalis-text);
-  text-align: center;
+  width: min(450px, 86%);
+  padding: 26px 28px;
+  border-radius: 20px;
+  background: var(--voc-card);
+  border: 1px solid var(--voc-border);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 35px rgba(139, 92, 246, 0.18);
+  color: var(--voc-text);
+  text-align: left;
+  position: relative;
+  overflow: hidden;
 }
 
-/* Forme d'onde animée */
-#vocalis-overlay .vocalis-logo {
+#vocalis-overlay .vocalis-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--voc-accent-bright), var(--voc-cyan-bright), transparent);
+}
+
+/* En-tête de marque */
+#vocalis-overlay .vocalis-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+#vocalis-overlay .vocalis-brand-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#vocalis-overlay .vocalis-badge-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(34, 211, 238, 0.15));
+  border: 1px solid rgba(167, 139, 250, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  height: 34px;
-  margin-bottom: 14px;
-}
-#vocalis-overlay .vocalis-logo span {
-  width: 5px;
-  border-radius: 3px;
-  background: linear-gradient(180deg, var(--vocalis-accent), var(--vocalis-accent-2));
-  animation: vocalis-pulse 1s ease-in-out infinite;
-}
-#vocalis-overlay .vocalis-logo span:nth-child(1) { height: 12px; animation-delay: 0s; }
-#vocalis-overlay .vocalis-logo span:nth-child(2) { height: 24px; animation-delay: 0.15s; }
-#vocalis-overlay .vocalis-logo span:nth-child(3) { height: 34px; animation-delay: 0.3s; }
-#vocalis-overlay .vocalis-logo span:nth-child(4) { height: 20px; animation-delay: 0.45s; }
-#vocalis-overlay .vocalis-logo span:nth-child(5) { height: 28px; animation-delay: 0.6s; }
-
-@keyframes vocalis-pulse {
-  0%, 100% { transform: scaleY(0.55); opacity: 0.7; }
-  50% { transform: scaleY(1); opacity: 1; }
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.3);
 }
 
-#vocalis-overlay .vocalis-title {
+#vocalis-overlay .vocalis-brand-titles {
+  display: flex;
+  flex-direction: column;
+}
+
+#vocalis-overlay .vocalis-brand-name {
   font-size: 17px;
-  font-weight: 600;
-  margin: 0 0 6px;
-}
-#vocalis-overlay .vocalis-subtitle {
-  font-size: 13px;
-  color: var(--vocalis-muted);
-  margin: 0 0 18px;
-  line-height: 1.5;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  background: linear-gradient(90deg, #ffffff, #ddd6fe);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-#vocalis-overlay .vocalis-progress {
+#vocalis-overlay .vocalis-brand-tag {
+  font-size: 11.5px;
+  color: var(--voc-muted);
+  font-weight: 500;
+}
+
+/* Égaliseur sonore dynamique */
+#vocalis-overlay .vocalis-equalizer {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 22px;
+}
+
+#vocalis-overlay .vocalis-equalizer span {
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--voc-accent-bright), var(--voc-cyan-bright));
+  animation: vocalis-eq 0.9s ease-in-out infinite alternate;
+}
+
+#vocalis-overlay .vocalis-equalizer span:nth-child(1) { height: 8px; animation-delay: 0.1s; }
+#vocalis-overlay .vocalis-equalizer span:nth-child(2) { height: 16px; animation-delay: 0.3s; }
+#vocalis-overlay .vocalis-equalizer span:nth-child(3) { height: 22px; animation-delay: 0.5s; }
+#vocalis-overlay .vocalis-equalizer span:nth-child(4) { height: 12px; animation-delay: 0.2s; }
+#vocalis-overlay .vocalis-equalizer span:nth-child(5) { height: 18px; animation-delay: 0.4s; }
+
+@keyframes vocalis-eq {
+  0% { transform: scaleY(0.35); opacity: 0.6; }
+  100% { transform: scaleY(1); opacity: 1; filter: drop-shadow(0 0 4px var(--voc-cyan-bright)); }
+}
+
+/* ---------------- Stepper multi-étapes ---------------- */
+#vocalis-overlay .vocalis-stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 18px 0;
+}
+
+#vocalis-overlay .vocalis-step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.25s ease;
+}
+
+#vocalis-overlay .vocalis-step.active {
+  background: rgba(139, 92, 246, 0.08);
+  border-color: var(--voc-border-active);
+  box-shadow: 0 0 15px rgba(34, 211, 238, 0.1);
+}
+
+#vocalis-overlay .vocalis-step.done {
+  background: rgba(16, 185, 129, 0.06);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+#vocalis-overlay .vocalis-step-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 2px solid var(--voc-muted);
+  font-size: 11px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+#vocalis-overlay .vocalis-step.pending .vocalis-step-icon {
+  opacity: 0.4;
+  border-color: var(--voc-muted);
+}
+
+#vocalis-overlay .vocalis-step.active .vocalis-step-icon {
+  border-color: var(--voc-cyan-bright);
+  border-top-color: transparent;
+  animation: vocalis-spin 0.8s linear infinite;
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.4);
+}
+
+#vocalis-overlay .vocalis-step.done .vocalis-step-icon {
+  border-color: var(--voc-success);
+  background: var(--voc-success);
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+@keyframes vocalis-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+#vocalis-overlay .vocalis-step-body {
+  flex: 1;
+  min-width: 0;
+}
+
+#vocalis-overlay .vocalis-step-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--voc-text);
+  margin-bottom: 2px;
+}
+
+#vocalis-overlay .vocalis-step.active .vocalis-step-title {
+  color: #ffffff;
+}
+
+#vocalis-overlay .vocalis-step-sub {
+  font-size: 11.5px;
+  color: var(--voc-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#vocalis-overlay .vocalis-step.active .vocalis-step-sub {
+  color: var(--voc-cyan-bright);
+}
+
+#vocalis-overlay .vocalis-step.done .vocalis-step-sub {
+  color: #6ee7b7;
+}
+
+/* Jauge de progression générale */
+#vocalis-overlay .vocalis-progress-bar {
   height: 6px;
   border-radius: 3px;
-  background: #0e0c17;
-  border: 1px solid var(--vocalis-border);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--voc-border);
   overflow: hidden;
+  margin: 18px 0 14px;
 }
+
 #vocalis-overlay .vocalis-progress-fill {
   height: 100%;
-  width: 35%;
+  width: 0%;
   border-radius: 3px;
-  background: linear-gradient(90deg, var(--vocalis-accent), var(--vocalis-accent-2));
+  background: linear-gradient(90deg, var(--voc-accent), var(--voc-cyan-bright), var(--voc-accent-bright));
+  background-size: 200% 100%;
+  animation: vocalis-shimmer 2s linear infinite;
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.8);
+  transition: width 0.3s ease;
 }
+
 #vocalis-overlay .vocalis-progress-fill.indeterminate {
-  animation: vocalis-slide 1.4s ease-in-out infinite;
+  width: 40% !important;
+  animation: vocalis-slide 1.4s ease-in-out infinite alternate, vocalis-shimmer 2s linear infinite;
 }
+
 @keyframes vocalis-slide {
-  0% { margin-left: -35%; }
-  100% { margin-left: 100%; }
+  0% { transform: translateX(-60%); }
+  100% { transform: translateX(200%); }
 }
 
-#vocalis-overlay .vocalis-note {
-  margin: 16px 0 0;
-  font-size: 11px;
-  color: var(--vocalis-muted);
-  line-height: 1.5;
+@keyframes vocalis-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
 }
 
-#vocalis-overlay .vocalis-card.error {
-  border-color: #7f1d1d;
-  box-shadow: 0 18px 50px rgba(127, 29, 29, 0.35);
-}
-#vocalis-overlay .vocalis-card.error .vocalis-logo span {
-  background: linear-gradient(180deg, #ef4444, #f97316);
-  animation: none;
+/* Pied de carte */
+#vocalis-overlay .vocalis-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
 }
 
 #vocalis-overlay .vocalis-close {
-  display: inline-block;
-  margin: 14px auto 0;
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid var(--vocalis-border);
-  background: transparent;
-  color: var(--vocalis-muted);
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid var(--voc-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--voc-muted);
+  font-size: 11.5px;
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
+
 #vocalis-overlay .vocalis-close:hover {
-  color: var(--vocalis-text);
-  border-color: var(--vocalis-muted);
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--voc-text);
+  border-color: var(--voc-accent-bright);
+}
+
+#vocalis-overlay .vocalis-tech-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--voc-accent-bright);
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  padding: 4px 9px;
+  border-radius: 6px;
+}
+
+/* État d'erreur */
+#vocalis-overlay .vocalis-card.error {
+  border-color: rgba(239, 68, 68, 0.5);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 35px rgba(239, 68, 68, 0.25);
+}
+
+#vocalis-overlay .vocalis-card.error::before {
+  background: linear-gradient(90deg, transparent, #ef4444, #f97316, transparent);
+}
+
+#vocalis-overlay .vocalis-card.error .vocalis-equalizer span {
+  background: #ef4444;
+  animation: none;
 }
 
 /* ------------------------------------------------------------
-   Barre « son traité » — posée juste au-dessus de la barre de
-   progression YouTube (.ytp-progress-bar). Même principe que la
-   barre grise de buffer vidéo, mais pour le son sans musique.
+   Barre « son traité » (au-dessus de la barre de lecture YouTube)
    ------------------------------------------------------------ */
 #vocalis-bufferbar {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 100%;           /* juste au-dessus de la barre rouge */
-  height: 3px;
-  margin-bottom: 3px;
-  border-radius: 2px;
-  pointer-events: none;
+  bottom: 100%;
+  height: 4px;
+  margin-bottom: 4px;
+  border-radius: 3px;
+  pointer-events: auto;
   z-index: 70;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
 }
+
 #vocalis-bufferbar .vocalis-bufferbar-seg {
   position: absolute;
   top: 0;
   height: 100%;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--vocalis-accent), var(--vocalis-accent-2));
-  opacity: 0.9;
-  box-shadow: 0 0 6px rgba(139, 92, 246, 0.7);
+  border-radius: 3px;
+  background: linear-gradient(90deg, #8b5cf6, #06b6d4, #a855f7);
+  background-size: 200% 100%;
+  animation: vocalis-shimmer 4s linear infinite;
+  opacity: 0.95;
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.8), 0 0 2px #22d3ee;
+  transition: width 0.3s ease, left 0.3s ease;
+}
+
+/* Bulle d'aide sur la barre de buffer */
+#vocalis-bufferbar-tooltip {
+  position: absolute;
+  bottom: 12px;
+  transform: translateX(-50%);
+  background: rgba(16, 14, 28, 0.95);
+  border: 1px solid var(--voc-border-active);
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #f3f0fa;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5), 0 0 10px rgba(34, 211, 238, 0.25);
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* ------------------------------------------------------------
-   Bouton Vocalis dans les contrôles du lecteur YouTube (.ytp-right-controls)
+   Bouton Vocalis dans les contrôles YouTube (.ytp-right-controls)
    ------------------------------------------------------------ */
 .ytp-button.vocalis-player-btn {
   position: relative !important;
@@ -175,8 +392,9 @@
   cursor: pointer !important;
   vertical-align: top !important;
   text-align: center !important;
-  opacity: 0.9;
-  transition: opacity 0.15s ease, transform 0.15s ease !important;
+  color: #ffffff;
+  opacity: 0.88;
+  transition: all 0.2s ease !important;
 }
 
 .ytp-button.vocalis-player-btn svg {
@@ -185,20 +403,16 @@
   pointer-events: none !important;
 }
 
-.ytp-button.vocalis-player-btn .vocalis-icon-path {
-  fill: #ffffff !important;
-  transition: fill 0.2s ease, filter 0.2s ease;
-}
-
 .ytp-button.vocalis-player-btn:hover {
   opacity: 1 !important;
-  transform: scale(1.1) !important;
+  color: #38bdf8 !important;
+  transform: scale(1.08) !important;
 }
 
 /* État actif : couleur violette éclatante + point indicateur actif */
-.ytp-button.vocalis-player-btn.active .vocalis-icon-path {
-  fill: #a78bfa !important;
-  filter: drop-shadow(0 0 5px rgba(167, 139, 250, 0.9)) !important;
+.ytp-button.vocalis-player-btn.active {
+  color: #c084fc !important;
+  filter: drop-shadow(0 0 6px rgba(192, 132, 252, 0.8)) !important;
 }
 
 .ytp-button.vocalis-player-btn.active::after {
@@ -210,22 +424,23 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #a78bfa !important;
-  box-shadow: 0 0 6px #a78bfa !important;
+  background: #22d3ee !important;
+  box-shadow: 0 0 8px #22d3ee !important;
 }
 
 /* État de chargement / préparation : cyan pulsant */
-.ytp-button.vocalis-player-btn.loading .vocalis-icon-path {
-  fill: #22d3ee !important;
-  animation: vocalis-glow 1s ease-in-out infinite alternate !important;
+.ytp-button.vocalis-player-btn.loading {
+  color: #22d3ee !important;
+  animation: vocalis-pulse-glow 1.2s ease-in-out infinite alternate !important;
 }
 
-@keyframes vocalis-glow {
-  from { filter: drop-shadow(0 0 2px #22d3ee); opacity: 0.7; }
-  to { filter: drop-shadow(0 0 8px #22d3ee); opacity: 1; }
+@keyframes vocalis-pulse-glow {
+  from { filter: drop-shadow(0 0 3px #22d3ee); opacity: 0.7; }
+  to { filter: drop-shadow(0 0 10px #22d3ee); opacity: 1; }
 }
 
 /* État d'erreur */
-.ytp-button.vocalis-player-btn.error .vocalis-icon-path {
-  fill: #f87171 !important;
+.ytp-button.vocalis-player-btn.error {
+  color: #ef4444 !important;
+  filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.8)) !important;
 }

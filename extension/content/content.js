@@ -78,8 +78,9 @@
         "opacity:0.9;padding:0!important;border:none!important;background:transparent!important;";
 
       btn.innerHTML = `
-        <svg height="100%" version="1.1" viewBox="0 0 36 36" width="100%" style="pointer-events:none;width:100%!important;height:100%!important;">
-          <path class="ytp-svg-fill vocalis-icon-path" fill="#ffffff" d="M 8.5,13 h 0.0 a 1.5,1.5 0 0 1 1.5,1.5 v 7.0 a 1.5,1.5 0 0 1 -1.5,1.5 h -0.0 a 1.5,1.5 0 0 1 -1.5,-1.5 v -7.0 a 1.5,1.5 0 0 1 1.5,-1.5 Z M 13.5,9 h 0.0 a 1.5,1.5 0 0 1 1.5,1.5 v 15.0 a 1.5,1.5 0 0 1 -1.5,1.5 h -0.0 a 1.5,1.5 0 0 1 -1.5,-1.5 v -15.0 a 1.5,1.5 0 0 1 1.5,-1.5 Z M 18.5,6 h 0.0 a 1.5,1.5 0 0 1 1.5,1.5 v 21.0 a 1.5,1.5 0 0 1 -1.5,1.5 h -0.0 a 1.5,1.5 0 0 1 -1.5,-1.5 v -21.0 a 1.5,1.5 0 0 1 1.5,-1.5 Z M 23.5,11 h 0.0 a 1.5,1.5 0 0 1 1.5,1.5 v 11.0 a 1.5,1.5 0 0 1 -1.5,1.5 h -0.0 a 1.5,1.5 0 0 1 -1.5,-1.5 v -11.0 a 1.5,1.5 0 0 1 1.5,-1.5 Z M 28.5,8 h 0.0 a 1.5,1.5 0 0 1 1.5,1.5 v 17.0 a 1.5,1.5 0 0 1 -1.5,1.5 h -0.0 a 1.5,1.5 0 0 1 -1.5,-1.5 v -17.0 a 1.5,1.5 0 0 1 1.5,-1.5 Z"></path>
+        <svg height="100%" version="1.1" viewBox="0 0 36 36" width="100%" style="pointer-events:none;width:100%!important;height:100%!important;" fill="none" stroke="currentColor">
+          <path class="vocalis-v-path" d="M 8,11 L 15.5,25.5 C 16,26.5 17,26.5 17.5,25.5 L 25,11" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path class="vocalis-wave-path" d="M 4,18 C 7,13.5 11,22.5 14.5,18 C 17.5,14 18.5,14 21.5,18 C 25,22.5 29,13.5 32,18" stroke-width="2.2" stroke-linecap="round"></path>
         </svg>
       `;
 
@@ -91,7 +92,7 @@
 
       btn.addEventListener("mouseenter", () => {
         btn.style.opacity = "1";
-        btn.style.transform = "scale(1.1)";
+        btn.style.transform = "scale(1.08)";
       });
       btn.addEventListener("mouseleave", () => {
         btn.style.opacity = state.enabled ? "1" : "0.9";
@@ -113,7 +114,6 @@
     const btn = document.getElementById("vocalis-player-btn");
     if (!btn) return;
 
-    const path = btn.querySelector(".vocalis-icon-path");
     const isActive = state.enabled && !!state.engine?.active;
     const isPreparing = state.enabled && !state.engine?.active && !state.status.notice;
     const isError = state.enabled && !!state.status.notice && !state.engine?.started;
@@ -121,22 +121,6 @@
     btn.classList.toggle("active", isActive);
     btn.classList.toggle("loading", isPreparing);
     btn.classList.toggle("error", isError);
-
-    if (path) {
-      if (isActive) {
-        path.setAttribute("fill", "#a78bfa");
-        path.style.filter = "drop-shadow(0 0 5px rgba(167, 139, 250, 0.9))";
-      } else if (isPreparing) {
-        path.setAttribute("fill", "#22d3ee");
-        path.style.filter = "drop-shadow(0 0 4px #22d3ee)";
-      } else if (isError) {
-        path.setAttribute("fill", "#f87171");
-        path.style.filter = "none";
-      } else {
-        path.setAttribute("fill", "#ffffff");
-        path.style.filter = "none";
-      }
-    }
 
     if (isActive) {
       btn.title = "Vocalis : Actif (musique retirée, voix seules) — Cliquer pour couper (Alt+V)";
@@ -154,52 +138,164 @@
     }
   }
 
-  function showOverlay({ title, subtitle, pct = null, error = false }) {
+  function renderOverlayDOM() {
     let overlay = document.getElementById("vocalis-overlay");
     if (!overlay) {
       overlay = document.createElement("div");
       overlay.id = "vocalis-overlay";
       overlay.innerHTML = `
         <div class="vocalis-card">
-          <div class="vocalis-logo">
-            <span></span><span></span><span></span><span></span><span></span>
+          <div class="vocalis-brand">
+            <div class="vocalis-brand-left">
+              <div class="vocalis-badge-icon">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor">
+                  <path d="M 4,7 L 11,20 C 11.4,20.8 12.6,20.8 13,20 L 20,7" stroke="#c084fc" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M 2,13 C 5,9 8,17 11,13 C 13,10 14,10 16,13 C 18,17 21,9 23,13" stroke="#22d3ee" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="vocalis-brand-titles">
+                <span class="vocalis-brand-name">Vocalis</span>
+                <span class="vocalis-brand-tag">YouTube sans musique de fond</span>
+              </div>
+            </div>
+            <div class="vocalis-equalizer">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
           </div>
-          <h2 class="vocalis-title"></h2>
-          <p class="vocalis-subtitle"></p>
-          <div class="vocalis-progress"><div class="vocalis-progress-fill"></div></div>
-          <button class="vocalis-close" type="button">Annuler — garder le son original</button>
-          <p class="vocalis-note"></p>
+
+          <div class="vocalis-stepper">
+            <div class="vocalis-step pending" id="voc-step-audio">
+              <div class="vocalis-step-icon">1</div>
+              <div class="vocalis-step-body">
+                <div class="vocalis-step-title">1. Flux audio YouTube</div>
+                <div class="vocalis-step-sub" id="voc-step-audio-sub">Connexion au flux audio…</div>
+              </div>
+            </div>
+            <div class="vocalis-step pending" id="voc-step-model">
+              <div class="vocalis-step-icon">2</div>
+              <div class="vocalis-step-body">
+                <div class="vocalis-step-title">2. Moteur IA (Demucs v4)</div>
+                <div class="vocalis-step-sub" id="voc-step-model-sub">Chargement du modèle…</div>
+              </div>
+            </div>
+            <div class="vocalis-step pending" id="voc-step-prep">
+              <div class="vocalis-step-icon">3</div>
+              <div class="vocalis-step-body">
+                <div class="vocalis-step-title">3. Isolation vocale</div>
+                <div class="vocalis-step-sub" id="voc-step-prep-sub">Pré-chargement des premières secondes…</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="vocalis-progress-bar">
+            <div class="vocalis-progress-fill indeterminate" id="voc-progress-fill"></div>
+          </div>
+
+          <div class="vocalis-footer">
+            <button class="vocalis-close" id="voc-close-btn" type="button">Annuler — son d'origine</button>
+            <div class="vocalis-tech-badge">⚡ 100% Local (RTX/WebGPU)</div>
+          </div>
         </div>`;
       (document.querySelector(".html5-video-player") || document.body).appendChild(overlay);
-      overlay.querySelector(".vocalis-close").addEventListener("click", cancelVocalis);
+      overlay.querySelector("#voc-close-btn").addEventListener("click", cancelVocalis);
+    }
+    return overlay;
+  }
+
+  function updateOverlayState({ name, pct = null, info = null, error = null }) {
+    if (!state.enabled && !error) {
+      hideOverlay();
+      return;
+    }
+    const overlay = renderOverlayDOM();
+    const card = overlay.querySelector(".vocalis-card");
+    const stepAudio = document.getElementById("voc-step-audio");
+    const stepModel = document.getElementById("voc-step-model");
+    const stepPrep = document.getElementById("voc-step-prep");
+    const subAudio = document.getElementById("voc-step-audio-sub");
+    const subModel = document.getElementById("voc-step-model-sub");
+    const subPrep = document.getElementById("voc-step-prep-sub");
+    const fill = document.getElementById("voc-progress-fill");
+    const closeBtn = document.getElementById("voc-close-btn");
+
+    if (error) {
+      card.classList.add("error");
+      if (subAudio) subAudio.textContent = "Erreur de traitement";
+      if (subModel) subModel.textContent = error;
+      if (fill) { fill.classList.remove("indeterminate"); fill.style.width = "0%"; }
+      if (closeBtn) closeBtn.textContent = "Fermer et garder le son original";
+      return;
+    }
+    card.classList.remove("error");
+    if (closeBtn) closeBtn.textContent = "Annuler — garder le son original";
+
+    function setStep(el, subEl, iconEl, status, subText, defaultNum) {
+      if (!el) return;
+      el.className = `vocalis-step ${status}`;
+      if (subEl) subEl.textContent = subText;
+      if (iconEl) iconEl.textContent = status === "done" ? "✓" : status === "active" ? "" : defaultNum;
     }
 
-    overlay.querySelector(".vocalis-card").classList.toggle("error", error);
-    overlay.querySelector(".vocalis-title").textContent = title;
-    overlay.querySelector(".vocalis-subtitle").textContent = subtitle || "";
-    overlay.querySelector(".vocalis-close").textContent = error
-      ? "Fermer et garder le son original"
-      : "Annuler — garder le son original";
-    overlay.querySelector(".vocalis-note").textContent = error
-      ? "La vidéo reste lisible avec son son d'origine."
-      : "Vocalis — tout se traite sur ton PC, rien ne part en ligne.";
+    const iconAudio = stepAudio?.querySelector(".vocalis-step-icon");
+    const iconModel = stepModel?.querySelector(".vocalis-step-icon");
+    const iconPrep = stepPrep?.querySelector(".vocalis-step-icon");
 
-    const fill = overlay.querySelector(".vocalis-progress-fill");
-    if (pct == null) {
+    if (name === "response") {
+      setStep(stepAudio, subAudio, iconAudio, "active", "Analyse du lecteur YouTube…", "1");
+      setStep(stepModel, subModel, iconModel, "pending", "En attente…", "2");
+      setStep(stepPrep, subPrep, iconPrep, "pending", "En attente…", "3");
       fill.classList.add("indeterminate");
       fill.style.width = "";
-    } else {
+    } else if (name === "download") {
+      const pText = pct != null ? `${pct} %` : "Récupération…";
+      const sizeText = info?.received ? ` (${MB(info.received)} / ${MB(info.total)})` : info?.seconds ? ` (${Math.round(info.seconds)} s)` : "";
+      setStep(stepAudio, subAudio, iconAudio, "active", `Téléchargement du flux : ${pText}${sizeText}`, "1");
+      setStep(stepModel, subModel, iconModel, "active", "Initialisation du modèle en parallèle…", "2");
+      setStep(stepPrep, subPrep, iconPrep, "pending", "En attente…", "3");
+      if (pct != null) { fill.classList.remove("indeterminate"); fill.style.width = `${pct}%`; }
+      else { fill.classList.add("indeterminate"); }
+    } else if (name === "decode" || name === "resample") {
+      setStep(stepAudio, subAudio, iconAudio, "done", "Flux audio extrait avec succès ✓", "1");
+      setStep(stepModel, subModel, iconModel, "active", "Formatage 44,1 kHz & session IA…", "2");
+      setStep(stepPrep, subPrep, iconPrep, "pending", "En attente…", "3");
+      fill.classList.add("indeterminate");
+      fill.style.width = "";
+    } else if (name === "model") {
+      setStep(stepAudio, subAudio, iconAudio, "done", "Flux audio extrait avec succès ✓", "1");
+      if (info?.cached || pct === 100) {
+        setStep(stepModel, subModel, iconModel, "done", "Modèle IA prêt (WebGPU RTX) ✓", "2");
+      } else {
+        setStep(stepModel, subModel, iconModel, "active", `Chargement du modèle : ${pct ?? 0} %`, "2");
+      }
+      setStep(stepPrep, subPrep, iconPrep, "pending", "En attente…", "3");
+      if (pct != null && !info?.cached) { fill.classList.remove("indeterminate"); fill.style.width = `${pct}%`; }
+    } else if (name === "prepare") {
+      setStep(stepAudio, subAudio, iconAudio, "done", "Flux audio extrait avec succès ✓", "1");
+      setStep(stepModel, subModel, iconModel, "done", "Modèle IA prêt (WebGPU RTX) ✓", "2");
+      setStep(stepPrep, subPrep, iconPrep, "active", `Pré-chargement : ${pct ?? 0} % (lecture dès 20 s)`, "3");
       fill.classList.remove("indeterminate");
-      fill.style.width = pct + "%";
+      fill.style.width = `${pct ?? 0}%`;
+    } else if (name === "stall") {
+      setStep(stepAudio, subAudio, iconAudio, "done", "Flux audio extrait avec succès ✓", "1");
+      setStep(stepModel, subModel, iconModel, "done", "Modèle IA prêt (WebGPU RTX) ✓", "2");
+      setStep(stepPrep, subPrep, iconPrep, "active", `Traitement de cette zone… (${pct ?? 0} %)`, "3");
+      fill.classList.add("indeterminate");
     }
+  }
+
+  function showOverlay(opts) {
+    updateOverlayState(opts);
   }
 
   function hideOverlay() {
-    document.getElementById("vocalis-overlay")?.remove();
+    const o = document.getElementById("vocalis-overlay");
+    if (!o) return;
+    o.classList.add("fade-out");
+    setTimeout(() => o.remove(), 250);
   }
 
   /* ------------------------------------------------------------------ */
-  /* Barre « son traité »                                                */
+  /* Barre « son traité » (Buffer bar interactive)                      */
   /* ------------------------------------------------------------------ */
 
   function updateBufferBar(ranges = [], duration = 0) {
@@ -214,8 +310,29 @@
     if (!bar) {
       bar = document.createElement("div");
       bar.id = "vocalis-bufferbar";
-      bar.title = "Vocalis : son déjà préparé (retour arrière instantané)";
+      bar.title = "Vocalis : son sans musique prêt";
       anchor.parentElement.appendChild(bar);
+
+      // Tooltip au survol de la barre de buffer
+      let tip = null;
+      bar.addEventListener("mouseenter", () => {
+        tip = document.createElement("div");
+        tip.id = "vocalis-bufferbar-tooltip";
+        document.body.appendChild(tip);
+      });
+      bar.addEventListener("mousemove", (e) => {
+        if (!tip) return;
+        const rect = bar.getBoundingClientRect();
+        const processedSec = ranges.reduce((acc, [s, e]) => acc + (e - s), 0);
+        const pctTotal = Math.round((processedSec / duration) * 100);
+        tip.textContent = `🎙️ Vocalis : ${pctTotal} % traité (${Math.round(processedSec)} s sans musique)`;
+        tip.style.left = e.clientX + "px";
+        tip.style.top = (rect.top - 36) + "px";
+      });
+      bar.addEventListener("mouseleave", () => {
+        tip?.remove();
+        tip = null;
+      });
     }
 
     bar.replaceChildren();
@@ -276,42 +393,7 @@
           if (pct % 25 === 0) logLine("téléchargement modèle : " + pct + " %");
         }
         if (!state.enabled) return;
-        if (name === "response") {
-          showOverlay({ title: "Lecture du lecteur YouTube…", pct: null });
-        } else if (name === "download") {
-          showOverlay({
-            title: "Réception de l'audio…",
-            subtitle:
-              pct != null
-                ? info?.seconds != null
-                  ? `${pct} % — ${Math.round(info.seconds)} s de vidéo reçues, la lecture démarre vite`
-                  : `${pct} %` + (info?.received ? ` — ${MB(info.received)} / ${MB(info.total)}` : "")
-                : "Connexion au flux audio…",
-            pct,
-          });
-        } else if (name === "decode") {
-          showOverlay({ title: "Analyse de l'audio…", pct: null });
-        } else if (name === "resample") {
-          showOverlay({ title: "Mise au format du modèle (44,1 kHz)…", pct: null });
-        } else if (name === "model") {
-          showOverlay({
-            title: info?.cached
-              ? "Chargement du modèle IA depuis ton PC…"
-              : "Téléchargement du modèle IA (une seule fois, ~172 Mo)…",
-            subtitle: info?.cached
-              ? ""
-              : info?.received
-                ? `${pct ?? 0} % — ${MB(info.received)} / ${MB(info.total)} (en parallèle de l'audio)`
-                : `${pct ?? 0} % — ensuite tout reste sur ton PC`,
-            pct: info?.cached ? null : pct,
-          });
-        } else if (name === "prepare") {
-          showOverlay({
-            title: "Séparation voix / musique…",
-            subtitle: `Pré-chargement : ${pct ?? 0} % — la lecture démarre dès que c'est prêt`,
-            pct,
-          });
-        }
+        updateOverlayState({ name, pct, info });
       },
       onLog: (msg) => { logLine(msg); },
       onProcessed: (ranges, duration) => {
@@ -320,11 +402,7 @@
       onStall: (pct) => {
         state.status.phase = "stall";
         updatePlayerButton();
-        showOverlay({
-          title: "Traitement de cette zone…",
-          subtitle: `Vidéo traitée à ${pct} % — un instant.`,
-          pct: null,
-        });
+        updateOverlayState({ name: "stall", pct });
       },
       onStallClear: () => {
         if (state.status.phase === "stall") {
@@ -341,14 +419,14 @@
           state.stallTimer = null;
         }
         if (state.enabled) {
-          showOverlay({ title: msg, subtitle: "", error: true, closable: true, pct: null });
+          updateOverlayState({ error: msg });
         }
       },
       onNotice: (msg) => {
         state.status.notice = msg;
         updatePlayerButton();
       },
-      onReady: (duration) => {
+      onReady: async (duration) => {
         state.currentVideoId = engine.videoId;
         hideOverlay();
         updateBufferBar(engine.ranges(), duration);
@@ -361,7 +439,7 @@
               v.play().catch(() => {});
             }
           }
-          engine.activate();
+          await engine.activate();
         }
       },
     });
@@ -384,14 +462,8 @@
         clearInterval(state.stallTimer); state.stallTimer = null;
         const etape = state.status.phase || "?";
         logLine("BLOCAGE : aucun progrès depuis 45 s à l'étape « " + etape + " »");
-        showOverlay({
-          title: "Pipeline bloqué à l'étape « " + etape + " ».",
-          subtitle:
-            "Ouvre le popup Vocalis et envoie le bloc debug affiché : " +
-            "tout y est journalisé, on saura quoi corriger.",
-          error: true,
-          closable: true,
-          pct: null,
+        updateOverlayState({
+          error: "Pipeline ralenti à l'étape « " + etape + " ». Ouvre le popup Vocalis pour voir le journal.",
         });
       }
     }, 5000);
@@ -401,18 +473,14 @@
     } catch (e) {
       logLine("ERREUR pipeline : " + (e?.message || e));
       if (state.enabled) {
-        showOverlay({
-          title: "Échec du pipeline : " + (e?.message || e),
-          subtitle: "Ouvre le popup Vocalis et envoie le bloc debug.",
-          error: true,
-          closable: true,
-          pct: null,
+        updateOverlayState({
+          error: "Échec du pipeline : " + (e?.message || e),
         });
       }
     }
   }
 
-  function setEnabled(enabled) {
+  async function setEnabled(enabled) {
     // Après un « Actualiser » de l'extension dans chrome://extensions, les
     // onglets ouverts gardent l'ANCIEN script dont le worker est mort :
     // on le détecte et on demande un F5 au lieu de pendouiller en silence.
@@ -420,10 +488,8 @@
     try { ctxOk = !!chrome.runtime.id; } catch { ctxOk = false; }
     if (!ctxOk || !enabled) {
       if (!ctxOk) {
-        showOverlay({
-          title: "Vocalis a été mis à jour.",
-          subtitle: "Recharge cette page YouTube (F5) puis reclique sur Vocalis.",
-          error: true,
+        updateOverlayState({
+          error: "Vocalis a été mis à jour. Recharge cette page YouTube (F5) puis reclique sur Vocalis.",
         });
         return;
       }
@@ -442,6 +508,10 @@
       hideBufferBar();
       if (video) {
         video.muted = false;
+        try {
+          const p = document.getElementById("movie_player");
+          if (p && typeof p.unMute === "function") p.unMute();
+        } catch {}
         if (state.pausedByUs && video.paused) video.play().catch(() => {});
       }
       state.pausedByUs = false;
@@ -458,8 +528,11 @@
 
     if (state.engine?.started) {
       updateBufferBar(state.engine.ranges(), state.engine.duration);
-      state.engine.activate();
-      if (state.pausedByUs && video) video.play().catch(() => {});
+      await state.engine.activate();
+      if (state.pausedByUs && video) {
+        video.play().catch(() => {});
+        state.pausedByUs = false;
+      }
     } else if (!state.engine || !state.engine.running) {
       // Jamais lancé, ou précédent essai en erreur : on (re)part.
       startPipeline();

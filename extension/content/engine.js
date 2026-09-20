@@ -332,12 +332,6 @@ self.VocalisEngine = (() => {
 
     async downloadFullAudio(url, expectedTotalBytes = 0) {
       this.hooks.onLog && this.hooks.onLog("démarrage du téléchargement audio résilient…");
-      const CHUNK_SIZE = 1024 * 1024; // 1 Mo par tranche
-      const chunks = [];
-      let received = 0;
-      let total = expectedTotalBytes || 0;
-      let start = 0;
-      let isComplete = false;
 
       // Nettoie l'URL de tout paramètre range conflictuel
       let cleanUrl = url;
@@ -347,7 +341,69 @@ self.VocalisEngine = (() => {
         cleanUrl = u.toString();
       } catch {}
 
-      // Télécharge une tranche : 1er essai direct (page/CORS), 2nd essai via l'extension (service worker)
+      // Stratégie 1 : Téléchargement complet direct via l'extension (sans restriction CORS ni bride de tranche)
+      try {
+        this.hooks.onLog && this.hooks.onLog("essai flux audio complet via extension (sans bride ni restriction)…");
+        const bgRes = await new Promise((resolve) => {
+          chrome.runtime.sendMessage(
+            { type: "vocalis:fetch-full-audio", url: cleanUrl },
+            (res) => resolve(res || { ok: false })
+          );
+        });
+        if (bgRes && bgRes.ok && bgRes.base64) {
+          const buf = this.base64ToArrayBuffer(bgRes.base64);
+          if (buf && buf.byteLength > 64000) {
+            this.phase("download", 100);
+            this.hooks.onLog &&
+              this.hooks.onLog(`audio complet reçu via extension (${(buf.byteLength / (1024 * 1024)).toFixed(1)} Mo)`);
+            return { buf, complete: true };
+          }
+        }
+      } catch (e) {
+        this.hooks.onLog && this.hooks.onLog("flux complet extension indisponible (" + (e?.message || e) + "), repli…");
+      }
+
+      // Stratégie 2 : Téléchargement direct en flux continu (getReader)
+      try {
+        const resp = await fetch(cleanUrl, { signal: AbortSignal.timeout(15000) });
+        if (resp.ok && resp.body) {
+          const total = parseInt(resp.headers.get("content-length") || "0", 10) || expectedTotalBytes;
+          const reader = resp.body.getReader();
+          const chunks = [];
+          let received = 0;
+          for (;;) {
+            if (this.aborted) return null;
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            received += value.length;
+            if (total) this.phase("download", Math.round((received / total) * 100));
+          }
+          if (received > 64000) {
+            const combined = new Uint8Array(received);
+            let off = 0;
+            for (const c of chunks) {
+              combined.set(c, off);
+              off += c.byteLength;
+            }
+            this.phase("download", 100);
+            this.hooks.onLog &&
+              this.hooks.onLog(`audio complet reçu en streaming (${(received / (1024 * 1024)).toFixed(1)} Mo)`);
+            return { buf: combined.buffer, complete: true };
+          }
+        }
+      } catch (e) {
+        this.hooks.onLog && this.hooks.onLog("streaming direct échoué (" + (e?.message || e) + "), repli tranches…");
+      }
+
+      // Stratégie 3 : Découpage par tranches (repli de dernier recours)
+      const CHUNK_SIZE = 1024 * 1024; // 1 Mo par tranche
+      const chunks = [];
+      let received = 0;
+      let total = expectedTotalBytes || 0;
+      let start = 0;
+      let isComplete = false;
+
       const fetchChunk = async (s, e) => {
         const rangeHeader = e != null ? `bytes=${s}-${e}` : `bytes=${s}-`;
         try {
@@ -363,11 +419,9 @@ self.VocalisEngine = (() => {
             if (m) t = parseInt(m[1], 10);
             return { buf, total: t };
           }
-        } catch {
-          // Erreur CORS / Failed to fetch : repli automatique vers l'extension ci-dessous
-        }
+        } catch {}
 
-        // Repli service worker (100 % hors CORS, permissions d'extension)
+        // Repli service worker
         const bgRes = await new Promise((resolve) => {
           chrome.runtime.sendMessage(
             { type: "vocalis:fetch-range", url: cleanUrl, start: s, end: e },
@@ -384,49 +438,44 @@ self.VocalisEngine = (() => {
         throw new Error(`tranche ${Math.round(s / 1048576)} Mo (${errDetail})`);
       };
 
-      // 1. Première tranche
-      const first = await fetchChunk(0, CHUNK_SIZE - 1);
-      if (this.aborted) return null;
-      if (!first.buf || first.buf.byteLength === 0) {
-        throw new Error("tranche 0 vide");
-      }
-      chunks.push(new Uint8Array(first.buf));
-      received += first.buf.byteLength;
-      if (first.total && first.total > first.buf.byteLength) {
-        total = first.total;
-      }
-      start = received;
+      try {
+        const first = await fetchChunk(0, CHUNK_SIZE - 1);
+        if (this.aborted) return null;
+        if (!first.buf || first.buf.byteLength === 0) throw new Error("tranche 0 vide");
+        chunks.push(new Uint8Array(first.buf));
+        received += first.buf.byteLength;
+        if (first.total && first.total > first.buf.byteLength) total = first.total;
+        start = received;
+        if (total) this.phase("download", Math.round((received / total) * 100));
 
-      if (total) this.phase("download", Math.round((received / total) * 100));
-
-      // Vérifie si le fichier tient entièrement dans la première tranche
-      if ((first.buf.byteLength < CHUNK_SIZE && !total) || (total && received >= total)) {
-        isComplete = true;
-      } else {
-        // 2. Tranches suivantes : on télécharge tant qu'on n'a pas atteint la fin du flux
-        while (total ? start < total : true) {
-          if (this.aborted) return null;
-          const end = total ? Math.min(start + CHUNK_SIZE - 1, total - 1) : start + CHUNK_SIZE - 1;
-          let chunk;
-          try {
-            chunk = await fetchChunk(start, end);
-          } catch (e) {
-            // Si la tranche échoue (par ex. bride CDN à 1 Mo), on s'arrête sans crasher si on a déjà du contenu
-            this.hooks.onLog &&
-              this.hooks.onLog(`fin de flux ou bride atteinte à ${Math.round(received / 1024)} Ko (${e?.message || e})`);
-            break;
-          }
-          if (this.aborted || !chunk || !chunk.buf || chunk.buf.byteLength === 0) break;
-          chunks.push(new Uint8Array(chunk.buf));
-          received += chunk.buf.byteLength;
-          if (chunk.total && chunk.total > total) total = chunk.total;
-          start += chunk.buf.byteLength;
-          if (total) this.phase("download", Math.round((received / total) * 100));
-          if (chunk.buf.byteLength < CHUNK_SIZE || (total && received >= total)) {
-            isComplete = true;
-            break;
+        if ((first.buf.byteLength < CHUNK_SIZE && !total) || (total && received >= total)) {
+          isComplete = true;
+        } else {
+          while (total ? start < total : true) {
+            if (this.aborted) return null;
+            const end = total ? Math.min(start + CHUNK_SIZE - 1, total - 1) : start + CHUNK_SIZE - 1;
+            let chunk;
+            try {
+              chunk = await fetchChunk(start, end);
+            } catch (e) {
+              this.hooks.onLog &&
+                this.hooks.onLog(`fin de flux ou bride atteinte à ${Math.round(received / 1024)} Ko (${e?.message || e})`);
+              break;
+            }
+            if (this.aborted || !chunk || !chunk.buf || chunk.buf.byteLength === 0) break;
+            chunks.push(new Uint8Array(chunk.buf));
+            received += chunk.buf.byteLength;
+            if (chunk.total && chunk.total > total) total = chunk.total;
+            start += chunk.buf.byteLength;
+            if (total) this.phase("download", Math.round((received / total) * 100));
+            if (chunk.buf.byteLength < CHUNK_SIZE || (total && received >= total)) {
+              isComplete = true;
+              break;
+            }
           }
         }
+      } catch (e) {
+        this.hooks.onLog && this.hooks.onLog("échec tranches (" + (e?.message || e) + ")");
       }
 
       const combined = new Uint8Array(received);
@@ -604,8 +653,11 @@ self.VocalisEngine = (() => {
       for (let i = fromIdx; i < this.nChunks; i++) {
         if (!this.processed.has(i) && i !== this.currentProcessing) wanted.push(i);
       }
+      for (let i = 0; i < fromIdx; i++) {
+        if (!this.processed.has(i) && i !== this.currentProcessing && !wanted.includes(i)) wanted.push(i);
+      }
       this.procQueue = wanted;
-      if (this.mode === "legacy") this.pump();
+      this.pump();
     }
 
     pump() {
@@ -620,6 +672,7 @@ self.VocalisEngine = (() => {
       const len = Math.min(CHUNK * SR, this.audio44.left.length - start);
       if (len <= 0) { this.pump(); return; }
       this.workerBusy = true;
+      this.workerBusySince = Date.now();
       this.currentProcessing = idx;
       const left = new Float32Array(this.audio44.left.subarray(start, start + len));
       const right = new Float32Array(this.audio44.right.subarray(start, start + len));
@@ -635,6 +688,7 @@ self.VocalisEngine = (() => {
     onChunkDone(idx, left, right) {
       this.currentProcessing = null;
       this.workerBusy = false;
+      this.workerBusySince = null;
 
       this.hooks.onLog &&
         this.hooks.onLog(`bloc ${idx + 1} prêt (${left.length} échantillons vocaux reçus)`);
@@ -661,8 +715,8 @@ self.VocalisEngine = (() => {
       this.hooks.onProcessed && this.hooks.onProcessed(this.ranges(), this.duration);
 
       // Si la vidéo attendait ce bloc précis pour reprendre la lecture
-      const curVidChunk = Math.floor(this.video.currentTime / CHUNK);
-      if (this.stalled && curVidChunk === idx) {
+      const curVidChunk = Math.floor((this.video.currentTime || 0) / CHUNK);
+      if (this.stalled && (curVidChunk === idx || this.processed.has(curVidChunk))) {
         this.stalled = false;
         this.hooks.onStallClear && this.hooks.onStallClear();
         if (this.pausedForStall && this.video.paused) {
@@ -955,8 +1009,13 @@ self.VocalisEngine = (() => {
       this._bound = this.onVideoEvent;
       for (const e of events) this.video.addEventListener(e, this._bound);
 
+      // Reprise immédiate et priorisation des blocs à partir de la position vidéo actuelle
+      const cur = Math.floor((this.video.currentTime || 0) / CHUNK);
+      this.setPriority(cur);
+      this.pump();
+
       this.watchdog = setInterval(() => {
-        if (!this.active || this.video.paused || this.stalled) return;
+        if (!this.active) return;
         if (this.video.playbackRate !== 1) return;
 
         // Force le silence sur YouTube tant que Vocalis est actif
@@ -972,10 +1031,19 @@ self.VocalisEngine = (() => {
           this.ctx.resume().catch(() => {});
         }
 
-        const cur = Math.floor(this.video.currentTime / CHUNK);
+        // Récupération de sécurité si un bloc IA n'a pas répondu depuis > 25s
+        if (this.workerBusy && this.workerBusySince && Date.now() - this.workerBusySince > 25000) {
+          this.hooks.onLog && this.hooks.onLog("watchdog : déblocage sécurité file IA");
+          this.workerBusy = false;
+          this.workerBusySince = null;
+          this.currentProcessing = null;
+          this.pump();
+        }
+
+        const curChunk = Math.floor((this.video.currentTime || 0) / CHUNK);
 
         // Si la vidéo avance au-delà de l'audio qui a pu être extrait :
-        if (this.audioDuration && cur * CHUNK >= this.audioDuration && this.audioDuration < this.duration - 5) {
+        if (this.audioDuration && curChunk * CHUNK >= this.audioDuration && this.audioDuration < this.duration - 5) {
           if (!this.streamEndNoticeShown) {
             this.streamEndNoticeShown = true;
             this.hooks.onNotice &&
@@ -990,19 +1058,24 @@ self.VocalisEngine = (() => {
           return;
         }
 
-        if (!this.processed.has(cur)) {
+        // Si le bloc courant n'est pas encore prêt, pause et priorité absolue
+        if (!this.processed.has(curChunk)) {
           this.stopSources();
           if (!this.video.paused && !this.stalled) {
             this.video.pause();
             this.pausedForStall = true;
           }
           this.stalled = true;
-          this.setPriorityIncr(cur);
+          if (!this.procQueue.includes(curChunk) && curChunk !== this.currentProcessing) {
+            this.procQueue.unshift(curChunk);
+          }
+          this.pump();
           this.hooks.onStall &&
             this.hooks.onStall(Math.round((this.processed.size / this.nChunks) * 100));
           return;
         }
 
+        // Si le bloc courant est prêt et qu'on était en attente (stall)
         if (this.stalled) {
           this.stalled = false;
           this.hooks.onStallClear && this.hooks.onStallClear();
@@ -1014,8 +1087,22 @@ self.VocalisEngine = (() => {
           return;
         }
 
+        // Alimente les blocs prioritaires à venir (jusqu'à 8 blocs d'avance)
+        const wanted = [];
+        for (let i = curChunk; i < Math.min(this.nChunks, curChunk + 8); i++) {
+          if (!this.processed.has(i) && !this.procQueue.includes(i) && i !== this.currentProcessing) {
+            wanted.push(i);
+          }
+        }
+        if (wanted.length) {
+          this.procQueue.unshift(...wanted);
+          this.pump();
+        }
+
+        if (this.video.paused) return;
+
         // Si aucune source n'est active alors que le bloc courant est prêt, on replanifie
-        if (this.sources.length === 0 && !this.video.paused) {
+        if (this.sources.length === 0) {
           this.reschedule();
           return;
         }
@@ -1026,7 +1113,7 @@ self.VocalisEngine = (() => {
           this.reschedule();
         }
         this.trimMemory();
-      }, 500);
+      }, 400);
 
       this.reschedule();
     }

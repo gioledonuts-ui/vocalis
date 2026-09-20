@@ -1,27 +1,36 @@
 /**
- * Vocalis — popup (bouton de la barre d'extensions Chrome)
+ * Vocalis — popup (contrôleur d'extension Chrome)
  *
- * v0.2 : active/désactive Vocalis sur l'onglet YouTube courant ET affiche
- * l'état en direct du pipeline (phase, progression, éventuel message).
+ * Affiche l'état en direct du pipeline (stepper multi-étapes, jauge, GPU,
+ * tampon) et permet d'activer/désactiver Vocalis en un clic.
  */
 
 const btn = document.getElementById("toggle");
+const toggleLabel = document.getElementById("toggle-label");
 const statusEl = document.getElementById("status");
+const statusDot = document.getElementById("status-dot");
 const versionEl = document.getElementById("version");
 const progressZone = document.getElementById("progress-zone");
 const progressFill = document.getElementById("progress-fill");
 const progressLabel = document.getElementById("progress-label");
+const stepperStepTitle = document.getElementById("stepper-step-title");
+const stepperPct = document.getElementById("stepper-pct");
+const stepPillAudio = document.getElementById("step-pill-audio");
+const stepPillIa = document.getElementById("step-pill-ia");
+const stepPillVocal = document.getElementById("step-pill-vocal");
+const specEngine = document.getElementById("spec-engine");
+const specBuffer = document.getElementById("spec-buffer");
 const syncWarning = document.getElementById("sync-warning");
 const reloadTabBtn = document.getElementById("reload-tab-btn");
 
 const PHASES = {
-  response: "Lecture du lecteur YouTube…",
-  download: "Téléchargement de l'audio",
-  decode: "Analyse de l'audio…",
-  resample: "Mise au format 44,1 kHz…",
-  model: "Modèle IA (HTDemucs)",
-  prepare: "Séparation voix / musique (pré-chargement)",
-  stall: "Traitement de la zone en cours…",
+  response: "Connexion au lecteur YouTube…",
+  download: "Téléchargement du flux audio",
+  decode: "Analyse du format audio…",
+  resample: "Mise au format IA (44,1 kHz)…",
+  model: "Chargement du modèle Demucs v4",
+  prepare: "Isolation de la voix (pré-chargement)",
+  stall: "Traitement de cette zone…",
 };
 
 function isYouTubeUrl(url = "") {
@@ -42,13 +51,13 @@ async function refresh() {
   const tab = await currentTab();
   const onYouTube = isYouTubeUrl(tab?.url);
 
-  versionEl.textContent = "v" + chrome.runtime.getManifest().version;
+  if (versionEl) versionEl.textContent = "v" + chrome.runtime.getManifest().version;
 
   if (!onYouTube) {
     btn.disabled = true;
-    btn.textContent = "Ouvre une vidéo YouTube";
-    statusEl.textContent =
-      "Vocalis s'utilise sur une page YouTube. Ouvre une vidéo puis reviens ici.";
+    if (toggleLabel) toggleLabel.textContent = "Ouvre une vidéo YouTube";
+    statusEl.textContent = "Ouvre une vidéo sur YouTube pour activer Vocalis.";
+    if (statusDot) statusDot.className = "status-dot";
     progressZone.classList.add("hidden");
     syncWarning?.classList.add("hidden");
     return;
@@ -64,12 +73,12 @@ async function refresh() {
   }
 
   if (connectionFailed) {
-    // Si le content script ne répond pas, la page a été ouverte avant la mise à jour
     syncWarning?.classList.remove("hidden");
     statusEl.textContent = "Page non synchronisée suite à la mise à jour.";
+    if (statusDot) statusDot.className = "status-dot error";
     btn.disabled = false;
     btn.classList.remove("on");
-    btn.textContent = "🔄 Recharger la page (F5)";
+    if (toggleLabel) toggleLabel.textContent = "🔄 Recharger YouTube (F5)";
     progressZone.classList.add("hidden");
     return;
   }
@@ -81,50 +90,93 @@ async function refresh() {
 
   btn.disabled = false;
   btn.classList.toggle("on", enabled);
-  btn.textContent = enabled ? "Désactiver Vocalis" : "Activer sur cette vidéo";
+
+  if (st?.mode) {
+    if (specEngine) specEngine.textContent = "WebGPU";
+  }
+  if (st?.processedPct != null) {
+    if (specBuffer) specBuffer.textContent = `${st.processedPct} %`;
+  }
 
   if (!enabled) {
-    statusEl.textContent =
-      "Prêt. Clique sur le bouton Vocalis dans la barre du lecteur YouTube ou ici pour lancer.";
+    if (toggleLabel) toggleLabel.textContent = "Activer sur cette vidéo";
+    statusEl.textContent = "Prêt. Clique pour retirer la musique de fond.";
+    if (statusDot) statusDot.className = "status-dot";
     progressZone.classList.add("hidden");
     return;
   }
 
-  if (st.notice) statusEl.textContent = st.notice;
-  else if (st.active) {
+  if (st.notice) {
+    statusEl.textContent = st.notice;
+    if (statusDot) statusDot.className = "status-dot error";
+    if (toggleLabel) toggleLabel.textContent = "Erreur — Réessayer";
+  } else if (st.active) {
+    if (statusDot) statusDot.className = "status-dot active";
+    if (toggleLabel) toggleLabel.textContent = "Désactiver Vocalis";
     const bits = [];
-    if (st.processedPct != null) bits.push(st.processedPct + " % traité");
-    if (st.mode) bits.push("mode " + st.mode);
-    if (st.via) bits.push("flux via " + st.via);
-    statusEl.textContent =
-      "Musique retirée, son synchronisé." + (bits.length ? " (" + bits.join(", ") + ")" : "");
-  } else if (st.started) statusEl.textContent = "Voix prêtes — bascule de la lecture…";
-  else statusEl.textContent = "Pipeline en cours…";
+    if (st.processedPct != null) bits.push(`${st.processedPct} % traité`);
+    if (st.via) bits.push(`via ${st.via}`);
+    statusEl.textContent = "Voix isolées, musique retirée." + (bits.length ? " (" + bits.join(" · ") + ")" : "");
+    progressZone.classList.add("hidden");
+  } else if (st.started) {
+    if (statusDot) statusDot.className = "status-dot loading";
+    if (toggleLabel) toggleLabel.textContent = "Voix prêtes…";
+    statusEl.textContent = "Pré-chargement terminé — synchronisation du lecteur…";
+    progressZone.classList.add("hidden");
+  } else {
+    if (statusDot) statusDot.className = "status-dot loading";
+    if (toggleLabel) toggleLabel.textContent = "Préparation en cours…";
+    statusEl.textContent = "Séparation en cours sur ton PC…";
+  }
 
+  // Mise à jour du stepper si en cours de préparation
   if (!st.active && st.phase) {
     progressZone.classList.remove("hidden");
-    const label = PHASES[st.phase] || st.phase;
+    const phaseName = st.phase;
+    const label = PHASES[phaseName] || phaseName;
+
     if (st.pct != null) {
       progressFill.style.width = st.pct + "%";
+      if (stepperPct) stepperPct.textContent = `${st.pct} %`;
       progressLabel.textContent = `${label} — ${st.pct} %`;
     } else {
-      progressFill.style.width = "100%";
+      progressFill.style.width = "40%";
+      progressFill.classList.add("indeterminate");
+      if (stepperPct) stepperPct.textContent = "…";
       progressLabel.textContent = label;
+    }
+
+    if (phaseName === "response" || phaseName === "download") {
+      if (stepPillAudio) stepPillAudio.className = "step-pill active";
+      if (stepPillIa) stepPillIa.className = "step-pill pending";
+      if (stepPillVocal) stepPillVocal.className = "step-pill pending";
+      if (stepperStepTitle) stepperStepTitle.textContent = "1. Flux audio YouTube";
+    } else if (phaseName === "decode" || phaseName === "resample" || phaseName === "model") {
+      if (stepPillAudio) stepPillAudio.className = "step-pill done";
+      if (stepPillIa) stepPillIa.className = "step-pill active";
+      if (stepPillVocal) stepPillVocal.className = "step-pill pending";
+      if (stepperStepTitle) stepperStepTitle.textContent = "2. Modèle IA (Demucs v4)";
+    } else if (phaseName === "prepare" || phaseName === "stall") {
+      if (stepPillAudio) stepPillAudio.className = "step-pill done";
+      if (stepPillIa) stepPillIa.className = "step-pill done";
+      if (stepPillVocal) stepPillVocal.className = "step-pill active";
+      if (stepperStepTitle) stepperStepTitle.textContent = "3. Isolation vocale";
     }
   } else {
     progressZone.classList.add("hidden");
   }
 
   const journalEl = document.getElementById("journal");
-  const debug =
-    "état=" + (st.active ? "ACTIF" : st.started ? "prêt" : st.running ? "pipeline" : "idle") +
-    "  phase=" + (st.phase ?? "-") +
-    (st.pct != null ? " " + st.pct + "%" : "") +
-    "  mode=" + (st.mode ?? "-") + "  via=" + (st.via ?? "-") + "\n" +
-    (st.journal || []).join("\n");
-  journalEl.classList.remove("hidden");
-  journalEl.textContent = debug;
-  journalEl.scrollTop = journalEl.scrollHeight;
+  if (journalEl) {
+    const debug =
+      "état=" + (st.active ? "ACTIF" : st.started ? "prêt" : st.running ? "pipeline" : "idle") +
+      "  phase=" + (st.phase ?? "-") +
+      (st.pct != null ? " " + st.pct + "%" : "") +
+      "  mode=" + (st.mode ?? "-") + "  via=" + (st.via ?? "-") + "\n" +
+      (st.journal || []).join("\n");
+    journalEl.textContent = debug;
+    journalEl.scrollTop = journalEl.scrollHeight;
+  }
 }
 
 btn.addEventListener("click", async () => {
@@ -177,4 +229,4 @@ if (openStudioBtn) {
 }
 
 refresh();
-setInterval(refresh, 800); // statut vivant pendant que le popup est ouvert
+setInterval(refresh, 800);

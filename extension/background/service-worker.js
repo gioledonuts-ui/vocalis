@@ -106,6 +106,32 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return;
   }
 
+  // Téléchargement sécurisé du flux audio complet sans restriction CORS ni bride de tranche
+  if (msg.type === "vocalis:fetch-full-audio") {
+    let cleanUrl = msg.url;
+    try {
+      const u = new URL(msg.url);
+      u.searchParams.delete("range");
+      cleanUrl = u.toString();
+    } catch {}
+
+    fetch(cleanUrl)
+      .then(async (resp) => {
+        if (!resp.ok) {
+          sendResponse({ ok: false, status: resp.status, error: "HTTP " + resp.status });
+          return;
+        }
+        const total = parseInt(resp.headers.get("content-length") || "0", 10);
+        const buf = await resp.arrayBuffer();
+        const base64 = arrayBufferToBase64(buf);
+        sendResponse({ ok: true, base64, total: total || buf.byteLength, size: buf.byteLength });
+      })
+      .catch((err) => {
+        sendResponse({ ok: false, error: err?.message || String(err) });
+      });
+    return true;
+  }
+
   // Téléchargement sécurisé de tranches audio sans restriction CORS
   // (exécuté avec l'origine de l'extension et les host_permissions googlevideo).
   if (msg.type === "vocalis:fetch-range") {

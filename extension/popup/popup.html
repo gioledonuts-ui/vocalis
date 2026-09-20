@@ -2,45 +2,106 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vocalis</title>
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
   <header>
-    <div class="logo">
-      <span class="bar b1"></span><span class="bar b2"></span><span class="bar b3"></span>
-      <span class="bar b4"></span><span class="bar b5"></span>
-    </div>
-    <div>
-      <h1>Vocalis</h1>
-      <p class="tagline">YouTube sans musique de fond</p>
+    <div class="brand">
+      <div class="logo-badge">
+        <img src="../icons/icon32.png" alt="Vocalis" width="28" height="28" />
+      </div>
+      <div class="titles">
+        <div class="title-row">
+          <h1>Vocalis</h1>
+          <span class="version-tag" id="version">v0.5.12</span>
+        </div>
+        <p class="tagline">YouTube sans musique de fond</p>
+      </div>
     </div>
   </header>
 
   <main>
-    <button id="toggle" disabled>…</button>
-    <p id="status" class="status">Chargement…</p>
-    <div id="progress-zone" class="progress-zone hidden">
-      <div class="progress"><div class="progress-fill" id="progress-fill"></div></div>
-      <p class="progress-label" id="progress-label"></p>
+    <!-- Bouton principal avec halo néon -->
+    <button id="toggle" class="main-toggle" disabled>
+      <span class="toggle-icon">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor">
+          <path d="M 4,7 L 11,20 C 11.4,20.8 12.6,20.8 13,20 L 20,7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M 2,13 C 5,9 8,17 11,13 C 13,10 14,10 16,13 C 18,17 21,9 23,13" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="toggle-label" id="toggle-label">Chargement…</span>
+    </button>
+
+    <!-- Statut textuel direct -->
+    <div class="status-zone">
+      <div class="status-dot" id="status-dot"></div>
+      <p id="status" class="status-text">Initialisation…</p>
     </div>
 
+    <!-- Stepper de progression à 3 étapes -->
+    <div id="progress-zone" class="stepper-card hidden">
+      <div class="stepper-header">
+        <span class="stepper-title" id="stepper-step-title">Traitement en cours</span>
+        <span class="stepper-pct" id="stepper-pct">0 %</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <div class="stepper-steps">
+        <div class="step-pill" id="step-pill-audio">1. Audio HD</div>
+        <div class="step-pill" id="step-pill-ia">2. IA Demucs</div>
+        <div class="step-pill" id="step-pill-vocal">3. Voix</div>
+      </div>
+      <p class="progress-sub" id="progress-label">Préparation de l'audio…</p>
+    </div>
+
+    <!-- Badges techniques en temps réel -->
+    <div class="specs-grid">
+      <div class="spec-card">
+        <span class="spec-label">MOTEUR</span>
+        <span class="spec-val" id="spec-engine">WebGPU</span>
+      </div>
+      <div class="spec-card">
+        <span class="spec-label">TAMPON</span>
+        <span class="spec-val" id="spec-buffer">0 s</span>
+      </div>
+      <div class="spec-card">
+        <span class="spec-label">CONFIDENTIALITÉ</span>
+        <span class="spec-val">100% Local</span>
+      </div>
+    </div>
+
+    <!-- Alerte F5 après mise à jour -->
     <div id="sync-warning" class="sync-warning hidden">
-      <p>⚠️ La page YouTube était ouverte avant la mise à jour de Vocalis.</p>
-      <button id="reload-tab-btn" class="reload-tab-btn" type="button">🔄 Recharger la page YouTube (F5)</button>
+      <p>⚠️ Page YouTube ouverte avant la mise à jour.</p>
+      <button id="reload-tab-btn" class="reload-tab-btn" type="button">🔄 Recharger YouTube (F5)</button>
     </div>
 
+    <!-- Accès Studio local -->
     <div class="studio-zone">
-      <button id="open-studio" class="studio-btn" type="button">🎙️ Studio local (tester un MP3/WAV)</button>
+      <button id="open-studio" class="studio-btn" type="button">
+        <span class="studio-icon">🎙️</span>
+        <span>Studio local (tester un MP3/WAV)</span>
+      </button>
     </div>
+
+    <!-- Journal d'activité repliable -->
+    <details class="journal-details">
+      <summary>Journal d'activité & diagnostics</summary>
+      <div id="journal" class="journal"></div>
+    </details>
   </main>
 
   <footer>
-    <span id="version"></span>
-    <span class="dot">·</span>
-    <span>traitement 100&nbsp;% local</span>
+    <div class="footer-left">
+      <span class="shield">🛡️</span> Traitement 100% local sur ton GPU
+    </div>
+    <div class="footer-right">
+      <a href="https://github.com/gioledonuts-ui/vocalis" target="_blank" rel="noreferrer">GitHub</a>
+    </div>
   </footer>
-
-  <div id="journal" class="journal hidden"></div>
 
   <script src="popup.js"></script>
 </body>
