@@ -11,10 +11,16 @@ self.VocalisInnertube = (() => {
   "use strict";
 
   /* Clients alignés sur l'état de l'art 2026 :
-     1. IOS : client avec clé iOS dédiée (flux direct sans limite 1 Mo).
-     2. MEDIA_CONNECT_FRONTEND & WEB_EMBEDDED_PLAYER : flux directs sans restriction.
-     3. ANDROID : repli mobile (robuste, toujours disponible). */
+     1. TVHTML5 : client Smart TV (flux direct haute fidélité, sans limite 1 Mo, sans PO-token).
+     2. IOS : client avec clé iOS dédiée.
+     3. MEDIA_CONNECT_FRONTEND & WEB_EMBEDDED_PLAYER : flux directs sans restriction.
+     4. ANDROID : repli mobile. */
   const CLIENTS = [
+    {
+      clientName: "TVHTML5",
+      clientVersion: "7.20250120.19.00",
+      userAgent: "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version",
+    },
     {
       clientName: "IOS",
       clientVersion: "17.33.2",
@@ -168,7 +174,9 @@ self.VocalisInnertube = (() => {
       }
       const all = j?.streamingData?.adaptiveFormats || [];
       const audioAll = all.filter((f) => (f.mimeType || "").startsWith("audio/"));
-      log("Innertube WEB : " + audioAll.length + " formats audio reçus");
+      const directCount = audioAll.filter((f) => f.url).length;
+      const cipherCount = audioAll.filter((f) => f.signatureCipher || f.cipher).length;
+      log("Innertube WEB : " + audioAll.length + " formats audio (directs=" + directCount + ", signés=" + cipherCount + ")");
       return { formats: audioAll };
     } catch (e) {
       log("Innertube WEB : échec (" + (e?.message || e) + ")");

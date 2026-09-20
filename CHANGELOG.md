@@ -4,6 +4,15 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.10] — 2026-09-20
+
+### Corrigé (Cause racine des blocs traités en 0 ms et client TVHTML5)
+- **Transmission binaire intégrale IPC via base64 (Cause racine des blocs 0 ms)** :
+  - Le canal de communication interne `chrome.runtime.Port` sérialisait les `ArrayBuffer` en objets vides `{}` lors du transfert entre le script de contenu et le worker offscreen. L'IA recevait donc un tableau de longueur 0, ce qui expliquait le traitement instantané (0 ms) et l'absence totale de voix en sortie.
+  - Les échantillons audio sont désormais encodés en base64 garanti pour le transit IPC. Les 441 000 échantillons réels par bloc sont transmis et traités par HTDemucs sur GPU.
+- **Client Innertube TVHTML5 prioritaire (flux complet direct sans bride 1 Mo)** :
+  - Ajout du client `TVHTML5` de YouTube (utilisé par yt-dlp) : flux audio direct haute définition sans signature, sans PO-token et sans limitation mobile à 1 Mo.
+
 ## [0.5.9] — 2026-09-20
 
 ### Corrigé (Flux PC 100 % complet et sortie audio WebAudio)

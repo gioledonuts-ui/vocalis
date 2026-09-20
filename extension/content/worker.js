@@ -39,6 +39,27 @@ const SEG_S = 10;
 const post = (msg, transfer = []) => self.postMessage(msg, transfer);
 const log = (msg) => post({ type: "log", msg });
 
+function arrayBufferToBase64(buffer) {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  const chunk = 8192;
+  for (let i = 0; i < len; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + chunk, len)));
+  }
+  return btoa(binary);
+}
+
+function base64ToArrayBuffer(base64) {
+  const binary = atob(base64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
 /* ---------------- Cache IndexedDB du modèle ---------------- */
 
 function openModelDB() {
@@ -237,19 +258,27 @@ self.onmessage = async (e) => {
       streamer = null;
     } else if (msg.type === "process") {
       if (!processor) await ensureReady();
-      const left = new Float32Array(msg.left);
-      const right = new Float32Array(msg.right);
+      const leftBuf = msg.leftB64 ? base64ToArrayBuffer(msg.leftB64) : (msg.left instanceof ArrayBuffer ? msg.left : null);
+      const rightBuf = msg.rightB64 ? base64ToArrayBuffer(msg.rightB64) : (msg.right instanceof ArrayBuffer ? msg.right : null);
+      if (!leftBuf || leftBuf.byteLength === 0) {
+        throw new Error("Tampon audio vide reçu par l'IA");
+      }
+      const left = new Float32Array(leftBuf);
+      const right = new Float32Array(rightBuf);
+      log("IA : séparation du bloc " + (msg.index + 1) + " (" + left.length + " éch.)…");
       const t0 = performance.now();
       const res = await processor.separate(left, right);
       const dt = Math.round(performance.now() - t0);
       doneCount++;
-      if (doneCount === 1 || doneCount % 3 === 0) {
-        log("IA : bloc " + (msg.index + 1) + " traité en " + dt + " ms (" + backend + ")");
-      }
-      post(
-        { type: "done", index: msg.index, left: res.vocals.left.buffer, right: res.vocals.right.buffer },
-        [res.vocals.left.buffer, res.vocals.right.buffer]
-      );
+      log("IA : bloc " + (msg.index + 1) + " terminé en " + dt + " ms (" + backend + ")");
+      const leftResB64 = arrayBufferToBase64(res.vocals.left.buffer);
+      const rightResB64 = arrayBufferToBase64(res.vocals.right.buffer);
+      post({
+        type: "done",
+        index: msg.index,
+        leftB64: leftResB64,
+        rightB64: rightResB64,
+      });
     }
   } catch (err) {
     post({ type: "error", where: msg?.type, message: String((err && err.message) || err) });

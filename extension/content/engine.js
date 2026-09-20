@@ -160,6 +160,12 @@ self.VocalisEngine = (() => {
         log("formats signés absents de la page, interrogation Innertube WEB…");
         const webData = await VocalisInnertube.queryWeb(targetId, apiKey, log);
         if (webData && webData.formats && webData.formats.length) {
+          const directs = webData.formats.filter((f) => f.url);
+          if (directs.length) {
+            const sorted = directs.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+            candidates.push({ format: sorted[0], via: "web-pc-direct", ua: null });
+            log("Innertube WEB : flux audio direct trouvé (" + directs.length + " formats)");
+          }
           ciphers = webData.formats.filter((f) => f.signatureCipher || f.cipher);
           log("Innertube WEB : " + ciphers.length + " formats signés obtenus");
         }
@@ -302,6 +308,17 @@ self.VocalisEngine = (() => {
     }
 
     /* ---------------- Téléchargement complet résilient ---------------- */
+
+    arrayBufferToBase64(buffer) {
+      let binary = "";
+      const bytes = new Uint8Array(buffer);
+      const len = bytes.byteLength;
+      const chunk = 8192;
+      for (let i = 0; i < len; i += chunk) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + chunk, len)));
+      }
+      return btoa(binary);
+    }
 
     base64ToArrayBuffer(base64) {
       const binaryString = atob(base64);
@@ -557,7 +574,15 @@ self.VocalisEngine = (() => {
         this._fallback(msg.message);
       } else if (msg.type === "done") {
         if (this.processed.has(msg.index)) { this.pump(); return; }
-        this.onChunkDone(msg.index, new Float32Array(msg.left), new Float32Array(msg.right));
+        const leftBuf = msg.leftB64 ? this.base64ToArrayBuffer(msg.leftB64) : (msg.left instanceof ArrayBuffer ? msg.left : null);
+        const rightBuf = msg.rightB64 ? this.base64ToArrayBuffer(msg.rightB64) : (msg.right instanceof ArrayBuffer ? msg.right : null);
+        if (!leftBuf || leftBuf.byteLength === 0) {
+          this.currentProcessing = null;
+          this.workerBusy = false;
+          this.pump();
+          return;
+        }
+        this.onChunkDone(msg.index, new Float32Array(leftBuf), new Float32Array(rightBuf));
       } else if (msg.type === "error") {
         if (!this.workerReady) {
           this.fatal = true;
@@ -597,15 +622,21 @@ self.VocalisEngine = (() => {
       this.currentProcessing = idx;
       const left = new Float32Array(this.audio44.left.subarray(start, start + len));
       const right = new Float32Array(this.audio44.right.subarray(start, start + len));
-      this.worker.postMessage(
-        { type: "process", index: idx, left: left.buffer, right: right.buffer },
-        [left.buffer, right.buffer]
-      );
+      this.worker.postMessage({
+        type: "process",
+        index: idx,
+        leftB64: this.arrayBufferToBase64(left.buffer),
+        rightB64: this.arrayBufferToBase64(right.buffer),
+        samples: len,
+      });
     }
 
     onChunkDone(idx, left, right) {
       this.currentProcessing = null;
       this.workerBusy = false;
+
+      this.hooks.onLog &&
+        this.hooks.onLog(`bloc ${idx + 1} prêt (${left.length} échantillons vocaux reçus)`);
 
       const pcm = new Int16Array(left.length * 2);
       for (let s = 0; s < left.length; s++) {
