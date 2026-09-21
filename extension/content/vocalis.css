@@ -1,23 +1,27 @@
 /* ============================================================
    Vocalis — Design System & Styles injectés sur YouTube
+   (Artisanal, épuré, haute précision)
    ============================================================ */
 
 :root {
-  --voc-bg: #0c0a14;
-  --voc-card: rgba(16, 14, 28, 0.94);
-  --voc-border: rgba(167, 139, 250, 0.22);
-  --voc-border-active: rgba(34, 211, 238, 0.45);
-  --voc-text: #f3f0fa;
-  --voc-muted: #9e96bd;
-  --voc-accent: #8b5cf6;
-  --voc-accent-bright: #c084fc;
-  --voc-cyan: #06b6d4;
-  --voc-cyan-bright: #22d3ee;
+  --voc-bg: #0c0e14;
+  --voc-surface: #141722;
+  --voc-surface-hover: #1b1f2e;
+  --voc-border: rgba(255, 255, 255, 0.08);
+  --voc-border-highlight: rgba(99, 102, 241, 0.35);
+  --voc-border-active: rgba(56, 189, 248, 0.45);
+  --voc-text: #f8fafc;
+  --voc-muted: #94a3b8;
+  --voc-dim: #64748b;
+  --voc-cyan: #38bdf8;
+  --voc-indigo: #6366f1;
+  --voc-violet: #a855f7;
   --voc-success: #10b981;
+  --voc-error: #f43f5e;
 }
 
 /* ------------------------------------------------------------
-   Overlay de chargement multi-étapes (posé sur le lecteur)
+   Overlay de chargement épuré & artisanal (posé sur le lecteur)
    ------------------------------------------------------------ */
 #vocalis-overlay {
   position: absolute;
@@ -26,9 +30,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(8, 6, 16, 0.65);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(12, 14, 20, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   pointer-events: none;
   opacity: 1;
@@ -41,252 +45,226 @@
 
 #vocalis-overlay .vocalis-card {
   pointer-events: auto;
-  width: min(450px, 86%);
-  padding: 26px 28px;
-  border-radius: 20px;
-  background: var(--voc-card);
+  width: min(390px, 90%);
+  padding: 22px 24px;
+  border-radius: 14px;
+  background: var(--voc-surface);
   border: 1px solid var(--voc-border);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 35px rgba(139, 92, 246, 0.18);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
   color: var(--voc-text);
   text-align: left;
-  position: relative;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
 }
 
-#vocalis-overlay .vocalis-card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--voc-accent-bright), var(--voc-cyan-bright), transparent);
-}
-
-/* En-tête de marque */
-#vocalis-overlay .vocalis-brand {
+/* En-tête : Marque & Status Pill / Fermeture */
+#vocalis-overlay .vocalis-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
 }
 
-#vocalis-overlay .vocalis-brand-left {
+#vocalis-overlay .vocalis-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
-#vocalis-overlay .vocalis-badge-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(34, 211, 238, 0.15));
-  border: 1px solid rgba(167, 139, 250, 0.35);
+#vocalis-overlay .vocalis-logo-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--voc-border);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 16px rgba(139, 92, 246, 0.3);
+  flex-shrink: 0;
 }
 
-#vocalis-overlay .vocalis-brand-titles {
+#vocalis-overlay .vocalis-brand-text {
   display: flex;
   flex-direction: column;
 }
 
 #vocalis-overlay .vocalis-brand-name {
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  background: linear-gradient(90deg, #ffffff, #ddd6fe);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--voc-text);
+  letter-spacing: -0.01em;
+  line-height: 1.25;
 }
 
 #vocalis-overlay .vocalis-brand-tag {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--voc-muted);
-  font-weight: 500;
+  line-height: 1.2;
 }
 
-/* Égaliseur sonore dynamique */
-#vocalis-overlay .vocalis-equalizer {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 22px;
-}
-
-#vocalis-overlay .vocalis-equalizer span {
-  width: 3px;
-  border-radius: 2px;
-  background: linear-gradient(180deg, var(--voc-accent-bright), var(--voc-cyan-bright));
-  animation: vocalis-eq 0.9s ease-in-out infinite alternate;
-}
-
-#vocalis-overlay .vocalis-equalizer span:nth-child(1) { height: 8px; animation-delay: 0.1s; }
-#vocalis-overlay .vocalis-equalizer span:nth-child(2) { height: 16px; animation-delay: 0.3s; }
-#vocalis-overlay .vocalis-equalizer span:nth-child(3) { height: 22px; animation-delay: 0.5s; }
-#vocalis-overlay .vocalis-equalizer span:nth-child(4) { height: 12px; animation-delay: 0.2s; }
-#vocalis-overlay .vocalis-equalizer span:nth-child(5) { height: 18px; animation-delay: 0.4s; }
-
-@keyframes vocalis-eq {
-  0% { transform: scaleY(0.35); opacity: 0.6; }
-  100% { transform: scaleY(1); opacity: 1; filter: drop-shadow(0 0 4px var(--voc-cyan-bright)); }
-}
-
-/* ---------------- Stepper multi-étapes ---------------- */
-#vocalis-overlay .vocalis-stepper {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin: 18px 0;
-}
-
-#vocalis-overlay .vocalis-step {
+#vocalis-overlay .vocalis-card-header-right {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  transition: all 0.25s ease;
+  gap: 8px;
 }
 
-#vocalis-overlay .vocalis-step.active {
-  background: rgba(139, 92, 246, 0.08);
-  border-color: var(--voc-border-active);
-  box-shadow: 0 0 15px rgba(34, 211, 238, 0.1);
+/* Pastille statut */
+#vocalis-overlay .vocalis-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--voc-cyan);
 }
 
-#vocalis-overlay .vocalis-step.done {
-  background: rgba(16, 185, 129, 0.06);
-  border-color: rgba(16, 185, 129, 0.25);
-}
-
-#vocalis-overlay .vocalis-step-icon {
-  width: 22px;
-  height: 22px;
+#vocalis-overlay .vocalis-status-pill .vocalis-status-dot {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  display: flex;
+  background: var(--voc-cyan);
+  box-shadow: 0 0 6px var(--voc-cyan);
+  animation: vocalis-pulse-dot 1.8s ease-in-out infinite;
+}
+
+@keyframes vocalis-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.85); }
+}
+
+#vocalis-overlay .vocalis-status-pill.error {
+  background: rgba(244, 63, 94, 0.1);
+  border-color: rgba(244, 63, 94, 0.3);
+  color: var(--voc-error);
+}
+
+#vocalis-overlay .vocalis-status-pill.error .vocalis-status-dot {
+  background: var(--voc-error);
+  box-shadow: 0 0 6px var(--voc-error);
+  animation: none;
+}
+
+/* Bouton croix en haut à droite */
+#vocalis-overlay .vocalis-close-icon-btn {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  border: 2px solid var(--voc-muted);
-  font-size: 11px;
-  font-weight: 700;
-  transition: all 0.2s ease;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--voc-dim);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
 }
 
-#vocalis-overlay .vocalis-step.pending .vocalis-step-icon {
-  opacity: 0.4;
-  border-color: var(--voc-muted);
+#vocalis-overlay .vocalis-close-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--voc-text);
+  border-color: var(--voc-border);
 }
 
-#vocalis-overlay .vocalis-step.active .vocalis-step-icon {
-  border-color: var(--voc-cyan-bright);
-  border-top-color: transparent;
-  animation: vocalis-spin 0.8s linear infinite;
-  box-shadow: 0 0 8px rgba(34, 211, 238, 0.4);
+/* Corps : Intitulé de phase & sous-titre explicatif */
+#vocalis-overlay .vocalis-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
-#vocalis-overlay .vocalis-step.done .vocalis-step-icon {
-  border-color: var(--voc-success);
-  background: var(--voc-success);
-  color: #ffffff;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
-}
-
-@keyframes vocalis-spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-#vocalis-overlay .vocalis-step-body {
-  flex: 1;
-  min-width: 0;
-}
-
-#vocalis-overlay .vocalis-step-title {
-  font-size: 13.5px;
+#vocalis-overlay .vocalis-phase-title {
+  font-size: 14px;
   font-weight: 600;
   color: var(--voc-text);
-  margin-bottom: 2px;
+  letter-spacing: -0.01em;
 }
 
-#vocalis-overlay .vocalis-step.active .vocalis-step-title {
-  color: #ffffff;
-}
-
-#vocalis-overlay .vocalis-step-sub {
-  font-size: 11.5px;
+#vocalis-overlay .vocalis-phase-subtitle {
+  font-size: 12px;
   color: var(--voc-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.45;
+  min-height: 17px;
 }
 
-#vocalis-overlay .vocalis-step.active .vocalis-step-sub {
-  color: var(--voc-cyan-bright);
+/* Jauge de progression fine (4px) */
+#vocalis-overlay .vocalis-gauge-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-#vocalis-overlay .vocalis-step.done .vocalis-step-sub {
-  color: #6ee7b7;
-}
-
-/* Jauge de progression générale */
 #vocalis-overlay .vocalis-progress-bar {
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--voc-border);
+  height: 4px;
+  width: 100%;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
   overflow: hidden;
-  margin: 18px 0 14px;
+  position: relative;
 }
 
 #vocalis-overlay .vocalis-progress-fill {
   height: 100%;
   width: 0%;
-  border-radius: 3px;
-  background: linear-gradient(90deg, var(--voc-accent), var(--voc-cyan-bright), var(--voc-accent-bright));
-  background-size: 200% 100%;
-  animation: vocalis-shimmer 2s linear infinite;
-  box-shadow: 0 0 10px rgba(139, 92, 246, 0.8);
-  transition: width 0.3s ease;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc);
+  transition: width 0.25s ease;
 }
 
 #vocalis-overlay .vocalis-progress-fill.indeterminate {
-  width: 40% !important;
-  animation: vocalis-slide 1.4s ease-in-out infinite alternate, vocalis-shimmer 2s linear infinite;
+  width: 35% !important;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  animation: vocalis-slide 1.4s ease-in-out infinite alternate;
 }
 
 @keyframes vocalis-slide {
-  0% { transform: translateX(-60%); }
-  100% { transform: translateX(200%); }
+  0% { left: -5%; transform: translateX(0); }
+  100% { left: 70%; transform: translateX(0); }
 }
 
-@keyframes vocalis-shimmer {
-  0% { background-position: 100% 0; }
-  100% { background-position: -100% 0; }
-}
-
-/* Pied de carte */
-#vocalis-overlay .vocalis-footer {
+/* Métriques sous la jauge */
+#vocalis-overlay .vocalis-metrics {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 8px;
+  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-#vocalis-overlay .vocalis-close {
+#vocalis-overlay .vocalis-step-indicator {
+  color: var(--voc-dim);
+}
+
+#vocalis-overlay .vocalis-pct-text {
+  color: var(--voc-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pied de carte : bouton Annuler */
+#vocalis-overlay .vocalis-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+#vocalis-overlay .vocalis-cancel-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 9px;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 7px;
   border: 1px solid var(--voc-border);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.03);
   color: var(--voc-muted);
   font-size: 11.5px;
   font-weight: 500;
@@ -294,35 +272,30 @@
   transition: all 0.15s ease;
 }
 
-#vocalis-overlay .vocalis-close:hover {
-  background: rgba(255, 255, 255, 0.09);
+#vocalis-overlay .vocalis-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
   color: var(--voc-text);
-  border-color: var(--voc-accent-bright);
-}
-
-#vocalis-overlay .vocalis-tech-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--voc-accent-bright);
-  background: rgba(139, 92, 246, 0.12);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  padding: 4px 9px;
-  border-radius: 6px;
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 /* État d'erreur */
 #vocalis-overlay .vocalis-card.error {
-  border-color: rgba(239, 68, 68, 0.5);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 35px rgba(239, 68, 68, 0.25);
+  border-color: rgba(244, 63, 94, 0.35);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.65), 0 0 20px rgba(244, 63, 94, 0.12);
 }
 
-#vocalis-overlay .vocalis-card.error::before {
-  background: linear-gradient(90deg, transparent, #ef4444, #f97316, transparent);
+#vocalis-overlay .vocalis-card.error .vocalis-progress-fill {
+  background: var(--voc-error);
 }
 
-#vocalis-overlay .vocalis-card.error .vocalis-equalizer span {
-  background: #ef4444;
-  animation: none;
+#vocalis-overlay .vocalis-card.error .vocalis-cancel-btn {
+  border-color: rgba(244, 63, 94, 0.3);
+  color: #fda4af;
+}
+
+#vocalis-overlay .vocalis-card.error .vocalis-cancel-btn:hover {
+  background: rgba(244, 63, 94, 0.15);
+  color: #fff;
 }
 
 /* ------------------------------------------------------------
@@ -347,12 +320,17 @@
   top: 0;
   height: 100%;
   border-radius: 3px;
-  background: linear-gradient(90deg, #8b5cf6, #06b6d4, #a855f7);
+  background: linear-gradient(90deg, #6366f1, #38bdf8, #a855f7);
   background-size: 200% 100%;
   animation: vocalis-shimmer 4s linear infinite;
   opacity: 0.95;
-  box-shadow: 0 0 8px rgba(139, 92, 246, 0.8), 0 0 2px #22d3ee;
+  box-shadow: 0 0 6px rgba(99, 102, 241, 0.6);
   transition: width 0.3s ease, left 0.3s ease;
+}
+
+@keyframes vocalis-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
 }
 
 /* Bulle d'aide sur la barre de buffer */
@@ -360,16 +338,16 @@
   position: absolute;
   bottom: 12px;
   transform: translateX(-50%);
-  background: rgba(16, 14, 28, 0.95);
+  background: rgba(20, 23, 34, 0.96);
   border: 1px solid var(--voc-border-active);
   padding: 5px 10px;
   border-radius: 7px;
   font-size: 11px;
-  font-weight: 600;
-  color: #f3f0fa;
+  font-weight: 500;
+  color: var(--voc-text);
   white-space: nowrap;
   pointer-events: none;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5), 0 0 10px rgba(34, 211, 238, 0.25);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5), 0 0 10px rgba(56, 189, 248, 0.15);
   z-index: 80;
   display: flex;
   align-items: center;
@@ -409,10 +387,10 @@
   transform: scale(1.08) !important;
 }
 
-/* État actif : couleur violette éclatante + point indicateur actif */
+/* État actif : couleur éclatante + point indicateur actif */
 .ytp-button.vocalis-player-btn.active {
-  color: #c084fc !important;
-  filter: drop-shadow(0 0 6px rgba(192, 132, 252, 0.8)) !important;
+  color: #38bdf8 !important;
+  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.8)) !important;
 }
 
 .ytp-button.vocalis-player-btn.active::after {
@@ -424,23 +402,23 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #22d3ee !important;
-  box-shadow: 0 0 8px #22d3ee !important;
+  background: #38bdf8 !important;
+  box-shadow: 0 0 8px #38bdf8 !important;
 }
 
 /* État de chargement / préparation : cyan pulsant */
 .ytp-button.vocalis-player-btn.loading {
-  color: #22d3ee !important;
+  color: #38bdf8 !important;
   animation: vocalis-pulse-glow 1.2s ease-in-out infinite alternate !important;
 }
 
 @keyframes vocalis-pulse-glow {
-  from { filter: drop-shadow(0 0 3px #22d3ee); opacity: 0.7; }
-  to { filter: drop-shadow(0 0 10px #22d3ee); opacity: 1; }
+  from { filter: drop-shadow(0 0 3px #38bdf8); opacity: 0.7; }
+  to { filter: drop-shadow(0 0 8px #38bdf8); opacity: 1; }
 }
 
 /* État d'erreur */
 .ytp-button.vocalis-player-btn.error {
-  color: #ef4444 !important;
-  filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.8)) !important;
+  color: #f43f5e !important;
+  filter: drop-shadow(0 0 6px rgba(244, 63, 94, 0.8)) !important;
 }

@@ -4,6 +4,24 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.16] — 2026-09-21
+
+### Ajouté & Amélioré (Refonte de l'Overlay YouTube — Design sobre & artisanal)
+- **Remplacement du vieux stepper multi-blocs** :
+  - Suppression définitive du grand cadre à 3 étapes (« Flux audio », « Moteur IA », « Isolation vocale ») et de ses égaliseurs animés criards.
+  - Remplacement par une carte flottante compacte, discrète et sobre (390 px) en verre dépoli mat ardoise (`#141722`) avec flou d'arrière-plan haute précision.
+- **Identité de marque & cohérence totale** :
+  - Intégration de l'emblème signature « V » (5 barres acoustiques en dégradé subtil cyan → violet) identique à celui du popup et du Studio.
+  - Pastille d'état minimaliste « WebGPU » avec indicateur lumineux pulsant doux.
+- **Jauge haute précision & métadonnées claires** :
+  - Jauge fine de 4 px avec dégradé fluide et animation douce de balayage.
+  - Ligne de métadonnées indiquant dynamiquement l'étape en cours et le pourcentage précis ou l'état d'avancement.
+  - Titre et sous-titre contextualisés à chaque phase du pipeline audio (acquisition, décodage PCM 44,1 kHz, modèle Demucs v4, isolation vocale).
+- **Contrôle et ergonomie renforcés** :
+  - Bouton « Annuler — garder le son original » épuré et toujours accessible en bas de carte.
+  - Bouton croix discrète (✕) en haut à droite pour une fermeture instantanée.
+  - Gestion sobre et explicite des états d'erreur sans effet néon agressif.
+
 ## [0.5.15] — 2026-09-21
 
 ### Ajouté & Amélioré (Refonte visuelle artisanale, identité unifiée & Nouveau Vocalis Studio)

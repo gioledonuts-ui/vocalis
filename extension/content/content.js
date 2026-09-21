@@ -147,11 +147,11 @@
       overlay = document.createElement("div");
       overlay.id = "vocalis-overlay";
       overlay.innerHTML = `
-        <div class="vocalis-card">
-          <div class="vocalis-brand">
-            <div class="vocalis-brand-left">
-              <div class="vocalis-badge-icon">
-                <svg viewBox="0 0 36 36" width="22" height="22" fill="none">
+        <div class="vocalis-card" id="voc-card">
+          <div class="vocalis-card-header">
+            <div class="vocalis-brand">
+              <div class="vocalis-logo-icon">
+                <svg viewBox="0 0 36 36" width="20" height="20" fill="none">
                   <defs>
                     <linearGradient id="vocOvGrad" x1="6" y1="18" x2="30" y2="18" gradientUnits="userSpaceOnUse">
                       <stop offset="0%" stop-color="#38bdf8"/>
@@ -166,133 +166,174 @@
                   <rect x="27.7" y="8" width="3.2" height="15" rx="1.6" fill="url(#vocOvGrad)"/>
                 </svg>
               </div>
-              <div class="vocalis-brand-titles">
+              <div class="vocalis-brand-text">
                 <span class="vocalis-brand-name">Vocalis</span>
-                <span class="vocalis-brand-tag">YouTube sans musique de fond</span>
+                <span class="vocalis-brand-tag">Séparation vocale locale</span>
               </div>
             </div>
-            <div class="vocalis-equalizer">
-              <span></span><span></span><span></span><span></span><span></span>
+            <div class="vocalis-card-header-right">
+              <div class="vocalis-status-pill" id="voc-status-pill">
+                <span class="vocalis-status-dot"></span>
+                <span class="vocalis-status-pill-text" id="voc-status-pill-text">WebGPU</span>
+              </div>
+              <button class="vocalis-close-icon-btn" id="voc-close-icon-btn" type="button" aria-label="Annuler et fermer" title="Annuler et fermer">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                  <path d="M4 4l8 8M12 4l-8 8"/>
+                </svg>
+              </button>
             </div>
           </div>
 
-          <div class="vocalis-stepper">
-            <div class="vocalis-step pending" id="voc-step-audio">
-              <div class="vocalis-step-icon">1</div>
-              <div class="vocalis-step-body">
-                <div class="vocalis-step-title">1. Flux audio YouTube</div>
-                <div class="vocalis-step-sub" id="voc-step-audio-sub">Connexion au flux audio…</div>
-              </div>
+          <div class="vocalis-card-body">
+            <div class="vocalis-phase-title" id="voc-phase-title">Connexion au flux audio…</div>
+            <div class="vocalis-phase-subtitle" id="voc-phase-sub">Analyse du lecteur YouTube</div>
+          </div>
+
+          <div class="vocalis-gauge-section">
+            <div class="vocalis-progress-bar">
+              <div class="vocalis-progress-fill indeterminate" id="voc-progress-fill"></div>
             </div>
-            <div class="vocalis-step pending" id="voc-step-model">
-              <div class="vocalis-step-icon">2</div>
-              <div class="vocalis-step-body">
-                <div class="vocalis-step-title">2. Moteur IA (Demucs v4)</div>
-                <div class="vocalis-step-sub" id="voc-step-model-sub">Chargement du modèle…</div>
-              </div>
-            </div>
-            <div class="vocalis-step pending" id="voc-step-prep">
-              <div class="vocalis-step-icon">3</div>
-              <div class="vocalis-step-body">
-                <div class="vocalis-step-title">3. Isolation vocale</div>
-                <div class="vocalis-step-sub" id="voc-step-prep-sub">Pré-chargement des premières secondes…</div>
-              </div>
+            <div class="vocalis-metrics">
+              <span class="vocalis-step-indicator" id="voc-step-ind">Étape 1/3 • Flux audio</span>
+              <span class="vocalis-pct-text" id="voc-pct-text">Connexion</span>
             </div>
           </div>
 
-          <div class="vocalis-progress-bar">
-            <div class="vocalis-progress-fill indeterminate" id="voc-progress-fill"></div>
-          </div>
-
-          <div class="vocalis-footer">
-            <button class="vocalis-close" id="voc-close-btn" type="button">Annuler — son d'origine</button>
-            <div class="vocalis-tech-badge">⚡ 100% Local (RTX/WebGPU)</div>
+          <div class="vocalis-card-footer">
+            <button class="vocalis-cancel-btn" id="voc-close-btn" type="button">
+              Annuler — garder le son original
+            </button>
           </div>
         </div>`;
       (document.querySelector(".html5-video-player") || document.body).appendChild(overlay);
-      overlay.querySelector("#voc-close-btn").addEventListener("click", cancelVocalis);
+      overlay.querySelector("#voc-close-btn")?.addEventListener("click", cancelVocalis);
+      overlay.querySelector("#voc-close-icon-btn")?.addEventListener("click", cancelVocalis);
     }
     return overlay;
   }
 
-  function updateOverlayState({ name, pct = null, info = null, error = null }) {
-    if (!state.enabled && !error) {
+  function updateOverlayState(opts = {}) {
+    const { name = null, pct = null, info = null, error = null, title = null, subtitle = null } = opts;
+    const isError = !!error || !!opts.error;
+    if (!state.enabled && !isError) {
       hideOverlay();
       return;
     }
     const overlay = renderOverlayDOM();
     const card = overlay.querySelector(".vocalis-card");
-    const stepAudio = document.getElementById("voc-step-audio");
-    const stepModel = document.getElementById("voc-step-model");
-    const stepPrep = document.getElementById("voc-step-prep");
-    const subAudio = document.getElementById("voc-step-audio-sub");
-    const subModel = document.getElementById("voc-step-model-sub");
-    const subPrep = document.getElementById("voc-step-prep-sub");
+    const phaseTitle = document.getElementById("voc-phase-title");
+    const phaseSub = document.getElementById("voc-phase-sub");
+    const stepInd = document.getElementById("voc-step-ind");
+    const pctText = document.getElementById("voc-pct-text");
     const fill = document.getElementById("voc-progress-fill");
+    const statusPill = document.getElementById("voc-status-pill");
+    const statusPillText = document.getElementById("voc-status-pill-text");
     const closeBtn = document.getElementById("voc-close-btn");
 
-    if (error) {
-      card.classList.add("error");
-      if (subAudio) subAudio.textContent = "Erreur de traitement";
-      if (subModel) subModel.textContent = error;
-      if (fill) { fill.classList.remove("indeterminate"); fill.style.width = "0%"; }
-      if (closeBtn) closeBtn.textContent = "Fermer et garder le son original";
+    if (isError) {
+      card?.classList.add("error");
+      statusPill?.classList.add("error");
+      if (statusPillText) statusPillText.textContent = "Erreur";
+      if (phaseTitle) phaseTitle.textContent = title || "Traitement interrompu";
+      if (phaseSub) phaseSub.textContent = (typeof error === "string" ? error : subtitle) || "Impossible d'isoler les voix.";
+      if (stepInd) stepInd.textContent = "Échec du traitement";
+      if (pctText) pctText.textContent = "—";
+      if (fill) {
+        fill.classList.remove("indeterminate");
+        fill.style.width = "0%";
+      }
+      if (closeBtn) closeBtn.textContent = "Fermer — garder le son original";
       return;
     }
-    card.classList.remove("error");
+
+    card?.classList.remove("error");
+    statusPill?.classList.remove("error");
+    if (statusPillText) statusPillText.textContent = "WebGPU";
     if (closeBtn) closeBtn.textContent = "Annuler — garder le son original";
 
-    function setStep(el, subEl, iconEl, status, subText, defaultNum) {
-      if (!el) return;
-      el.className = `vocalis-step ${status}`;
-      if (subEl) subEl.textContent = subText;
-      if (iconEl) iconEl.textContent = status === "done" ? "✓" : status === "active" ? "" : defaultNum;
-    }
-
-    const iconAudio = stepAudio?.querySelector(".vocalis-step-icon");
-    const iconModel = stepModel?.querySelector(".vocalis-step-icon");
-    const iconPrep = stepPrep?.querySelector(".vocalis-step-icon");
-
     if (name === "response") {
-      setStep(stepAudio, subAudio, iconAudio, "active", "Analyse du lecteur YouTube…", "1");
-      setStep(stepModel, subModel, iconModel, "pending", "En attente…", "2");
-      setStep(stepPrep, subPrep, iconPrep, "pending", "En attente…", "3");
-      fill.classList.add("indeterminate");
-      fill.style.width = "";
-    } else if (name === "download") {
-      const pText = pct != null ? `${pct} %` : "Récupération…";
-      const sizeText = info?.received ? ` (${MB(info.received)} / ${MB(info.total)})` : info?.seconds ? ` (${Math.round(info.seconds)} s)` : "";
-      setStep(stepAudio, subAudio, iconAudio, "active", `Téléchargement du flux : ${pText}${sizeText}`, "1");
-      setStep(stepModel, subModel, iconModel, "active", "Initialisation du modèle en parallèle…", "2");
-      setStep(stepPrep, subPrep, iconPrep, "pending", "En attente…", "3");
-      if (pct != null) { fill.classList.remove("indeterminate"); fill.style.width = `${pct}%`; }
-      else { fill.classList.add("indeterminate"); }
-    } else if (name === "decode" || name === "resample") {
-      setStep(stepAudio, subAudio, iconAudio, "done", "Flux audio extrait avec succès ✓", "1");
-      setStep(stepModel, subModel, iconModel, "active", "Formatage 44,1 kHz & session IA…", "2");
-      setStep(stepPrep, subPrep, iconPrep, "pending", "En attente…", "3");
-      fill.classList.add("indeterminate");
-      fill.style.width = "";
-    } else if (name === "model") {
-      setStep(stepAudio, subAudio, iconAudio, "done", "Flux audio extrait avec succès ✓", "1");
-      if (info?.cached || pct === 100) {
-        setStep(stepModel, subModel, iconModel, "done", "Modèle IA prêt (WebGPU RTX) ✓", "2");
-      } else {
-        setStep(stepModel, subModel, iconModel, "active", `Chargement du modèle : ${pct ?? 0} %`, "2");
+      if (phaseTitle) phaseTitle.textContent = "Connexion au flux audio…";
+      if (phaseSub) phaseSub.textContent = "Analyse du lecteur YouTube et des pistes disponibles";
+      if (stepInd) stepInd.textContent = "Étape 1/3 • Flux audio";
+      if (pctText) pctText.textContent = "Connexion";
+      if (fill) {
+        fill.classList.add("indeterminate");
+        fill.style.width = "";
       }
-      setStep(stepPrep, subPrep, iconPrep, "pending", "En attente…", "3");
-      if (pct != null && !info?.cached) { fill.classList.remove("indeterminate"); fill.style.width = `${pct}%`; }
+    } else if (name === "download") {
+      const p = pct != null ? `${pct} %` : "En cours";
+      const detail = info?.seconds
+        ? `${Math.round(info.seconds)} s reçues`
+        : info?.received
+          ? `${MB(info.received)} / ${MB(info.total)}`
+          : "Extraction des données audio…";
+      if (phaseTitle) phaseTitle.textContent = "Récupération du flux audio…";
+      if (phaseSub) phaseSub.textContent = detail;
+      if (stepInd) stepInd.textContent = "Étape 1/3 • Flux audio";
+      if (pctText) pctText.textContent = p;
+      if (fill) {
+        if (pct != null) {
+          fill.classList.remove("indeterminate");
+          fill.style.width = `${pct}%`;
+        } else {
+          fill.classList.add("indeterminate");
+          fill.style.width = "";
+        }
+      }
+    } else if (name === "decode" || name === "resample") {
+      if (phaseTitle) phaseTitle.textContent = "Préparation du signal audio…";
+      if (phaseSub) phaseSub.textContent = "Formatage stéréo 44,1 kHz & alignement Demucs v4";
+      if (stepInd) stepInd.textContent = "Étape 2/3 • Décodage";
+      if (pctText) pctText.textContent = "Formatage";
+      if (fill) {
+        fill.classList.add("indeterminate");
+        fill.style.width = "";
+      }
+    } else if (name === "model") {
+      const isReady = info?.cached || pct === 100;
+      if (phaseTitle) phaseTitle.textContent = isReady ? "Moteur IA prêt" : "Chargement du modèle Demucs…";
+      if (phaseSub) phaseSub.textContent = isReady
+        ? "Modèle Demucs v4 actif en mémoire GPU (WebGPU)"
+        : `Initialisation des poids neuronaux (${pct ?? 0} %)`;
+      if (stepInd) stepInd.textContent = "Étape 2/3 • Modèle IA";
+      if (pctText) pctText.textContent = isReady ? "100 %" : `${pct ?? 0} %`;
+      if (fill) {
+        if (isReady) {
+          fill.classList.remove("indeterminate");
+          fill.style.width = "100%";
+        } else if (pct != null && !info?.cached) {
+          fill.classList.remove("indeterminate");
+          fill.style.width = `${pct}%`;
+        } else {
+          fill.classList.add("indeterminate");
+          fill.style.width = "";
+        }
+      }
     } else if (name === "prepare") {
-      setStep(stepAudio, subAudio, iconAudio, "done", "Flux audio extrait avec succès ✓", "1");
-      setStep(stepModel, subModel, iconModel, "done", "Modèle IA prêt (WebGPU RTX) ✓", "2");
-      setStep(stepPrep, subPrep, iconPrep, "active", `Pré-chargement : ${pct ?? 0} % (lecture dès 20 s)`, "3");
-      fill.classList.remove("indeterminate");
-      fill.style.width = `${pct ?? 0}%`;
+      const p = Math.min(100, Math.max(0, pct ?? 0));
+      if (phaseTitle) phaseTitle.textContent = "Isolation des voix en cours…";
+      if (phaseSub) phaseSub.textContent = `Séparation Demucs v4 • Tampon d'écoute ${p} %`;
+      if (stepInd) stepInd.textContent = "Étape 3/3 • Isolation vocale";
+      if (pctText) pctText.textContent = `${p} %`;
+      if (fill) {
+        fill.classList.remove("indeterminate");
+        fill.style.width = `${p}%`;
+      }
     } else if (name === "stall") {
-      setStep(stepAudio, subAudio, iconAudio, "done", "Flux audio extrait avec succès ✓", "1");
-      setStep(stepModel, subModel, iconModel, "done", "Modèle IA prêt (WebGPU RTX) ✓", "2");
-      setStep(stepPrep, subPrep, iconPrep, "active", `Traitement de cette zone… (${pct ?? 0} %)`, "3");
-      fill.classList.add("indeterminate");
+      const p = pct != null ? `${pct} %` : "Calcul";
+      if (phaseTitle) phaseTitle.textContent = "Séparation vocale en continu…";
+      if (phaseSub) phaseSub.textContent = "Traitement du segment audio suivant sur votre GPU";
+      if (stepInd) stepInd.textContent = "Traitement actif";
+      if (pctText) pctText.textContent = p;
+      if (fill) {
+        if (pct != null) {
+          fill.classList.remove("indeterminate");
+          fill.style.width = `${pct}%`;
+        } else {
+          fill.classList.add("indeterminate");
+          fill.style.width = "";
+        }
+      }
     }
   }
 
