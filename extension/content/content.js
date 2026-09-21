@@ -78,9 +78,12 @@
         "opacity:0.9;padding:0!important;border:none!important;background:transparent!important;";
 
       btn.innerHTML = `
-        <svg height="100%" version="1.1" viewBox="0 0 36 36" width="100%" style="pointer-events:none;width:100%!important;height:100%!important;" fill="none" stroke="currentColor">
-          <path class="vocalis-v-path" d="M 8,11 L 15.5,25.5 C 16,26.5 17,26.5 17.5,25.5 L 25,11" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path>
-          <path class="vocalis-wave-path" d="M 4,18 C 7,13.5 11,22.5 14.5,18 C 17.5,14 18.5,14 21.5,18 C 25,22.5 29,13.5 32,18" stroke-width="2.2" stroke-linecap="round"></path>
+        <svg height="100%" version="1.1" viewBox="0 0 36 36" width="100%" style="pointer-events:none;width:24px!important;height:24px!important;" fill="none">
+          <rect x="6.5" y="8" width="3.2" height="15" rx="1.6" fill="currentColor"/>
+          <rect x="11.8" y="12" width="3.2" height="14" rx="1.6" fill="currentColor"/>
+          <rect x="17.1" y="16" width="3.2" height="13" rx="1.6" fill="currentColor"/>
+          <rect x="22.4" y="12" width="3.2" height="14" rx="1.6" fill="currentColor"/>
+          <rect x="27.7" y="8" width="3.2" height="15" rx="1.6" fill="currentColor"/>
         </svg>
       `;
 
@@ -148,9 +151,19 @@
           <div class="vocalis-brand">
             <div class="vocalis-brand-left">
               <div class="vocalis-badge-icon">
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor">
-                  <path d="M 4,7 L 11,20 C 11.4,20.8 12.6,20.8 13,20 L 20,7" stroke="#c084fc" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M 2,13 C 5,9 8,17 11,13 C 13,10 14,10 16,13 C 18,17 21,9 23,13" stroke="#22d3ee" stroke-width="1.8" stroke-linecap="round"/>
+                <svg viewBox="0 0 36 36" width="22" height="22" fill="none">
+                  <defs>
+                    <linearGradient id="vocOvGrad" x1="6" y1="18" x2="30" y2="18" gradientUnits="userSpaceOnUse">
+                      <stop offset="0%" stop-color="#38bdf8"/>
+                      <stop offset="50%" stop-color="#818cf8"/>
+                      <stop offset="100%" stop-color="#c084fc"/>
+                    </linearGradient>
+                  </defs>
+                  <rect x="6.5" y="8" width="3.2" height="15" rx="1.6" fill="url(#vocOvGrad)"/>
+                  <rect x="11.8" y="12" width="3.2" height="14" rx="1.6" fill="url(#vocOvGrad)"/>
+                  <rect x="17.1" y="16" width="3.2" height="13" rx="1.6" fill="url(#vocOvGrad)"/>
+                  <rect x="22.4" y="12" width="3.2" height="14" rx="1.6" fill="url(#vocOvGrad)"/>
+                  <rect x="27.7" y="8" width="3.2" height="15" rx="1.6" fill="url(#vocOvGrad)"/>
                 </svg>
               </div>
               <div class="vocalis-brand-titles">

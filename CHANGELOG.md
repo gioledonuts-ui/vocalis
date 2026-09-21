@@ -4,6 +4,26 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr-FR/1.1.0/).
 Chaque entrée correspond à une **Release GitHub** (c'est ce que le fichier
 `METTRE_A_JOUR.bat` vient chercher).
 
+## [0.5.15] — 2026-09-21
+
+### Ajouté & Amélioré (Refonte visuelle artisanale, identité unifiée & Nouveau Vocalis Studio)
+- **Identité de marque unifiée & Logo artisanal** :
+  - Création du véritable logo signature Vocalis : le « V » acoustique formé de 5 barres d'égalisation harmoniques avec un dégradé subtil cyan → violet.
+  - Rendu vectoriel ultra-net au pixel près, éliminant tout artefact d'IA ou de boîte noire dézoomée.
+  - Le logo est désormais rigoureusement identique partout : icône de l'extension Chrome, en-tête du popup, bouton du lecteur YouTube, overlay et en-tête du Studio.
+- **Refonte épurée et humaine du Popup** :
+  - Suppression de la grille de 3 gros blocs gadgets (« MOTEUR », « TAMPON », « CONFIDENTIALITÉ »).
+  - Remplacement par une ligne métadonnée discrète et sobre : `Moteur · Avance · 100% Local`.
+  - Palette sombre profonde matte (obsidienne / ardoise `#0c0e14` et `#141722`), bordures douces 1px, suppression des halos néon agressifs.
+  - Bouton d'action principal tactile et direct avec indicateur d'état LED clair.
+  - Carte d'accès dédiée et élégante vers Vocalis Studio.
+- **Refonte complète de Vocalis Studio (`studio.html` & `studio.css`)** :
+  - Alignement sur la même charte visuelle haut de gamme et épurée.
+  - Zone de glisser-déposer épurée avec icône audio vectorielle fine et prise en charge instantanée de tous formats audio (MP3, WAV, FLAC, M4A, OGG).
+  - Carte de sélection avec badges précis de métadonnées audio (nom, taille, durée, échantillonnage).
+  - Barre de progression fluide haute précision avec calcul du temps restant et vitesse en temps réel.
+  - Lecteur audio intégré pour écoute immédiate et bouton de téléchargement du WAV haute fidélité.
+
 ## [0.5.14] — 2026-09-20
 
 ### Corrigé (WebGPU JSEP initialisation & compatibilité Studio)

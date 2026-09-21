@@ -57,7 +57,7 @@ async function refresh() {
     btn.disabled = true;
     if (toggleLabel) toggleLabel.textContent = "Ouvre une vidéo YouTube";
     statusEl.textContent = "Ouvre une vidéo sur YouTube pour activer Vocalis.";
-    if (statusDot) statusDot.className = "status-dot";
+    if (statusDot) statusDot.className = "btn-dot";
     progressZone.classList.add("hidden");
     syncWarning?.classList.add("hidden");
     return;
@@ -75,7 +75,7 @@ async function refresh() {
   if (connectionFailed) {
     syncWarning?.classList.remove("hidden");
     statusEl.textContent = "Page non synchronisée suite à la mise à jour.";
-    if (statusDot) statusDot.className = "status-dot error";
+    if (statusDot) statusDot.className = "btn-dot error";
     btn.disabled = false;
     btn.classList.remove("on");
     if (toggleLabel) toggleLabel.textContent = "🔄 Recharger YouTube (F5)";
@@ -109,17 +109,17 @@ async function refresh() {
   if (!enabled) {
     if (toggleLabel) toggleLabel.textContent = "Activer sur cette vidéo";
     statusEl.textContent = "Prêt. Clique pour retirer la musique de fond.";
-    if (statusDot) statusDot.className = "status-dot";
+    if (statusDot) statusDot.className = "btn-dot";
     progressZone.classList.add("hidden");
     return;
   }
 
   if (st.notice) {
     statusEl.textContent = st.notice;
-    if (statusDot) statusDot.className = "status-dot error";
+    if (statusDot) statusDot.className = "btn-dot error";
     if (toggleLabel) toggleLabel.textContent = "Erreur — Réessayer";
   } else if (st.active) {
-    if (statusDot) statusDot.className = "status-dot active";
+    if (statusDot) statusDot.className = "btn-dot active";
     if (toggleLabel) toggleLabel.textContent = "Désactiver Vocalis";
     const bits = [];
     if (st.processedPct != null) bits.push(`${st.processedPct} % traité`);
@@ -127,12 +127,12 @@ async function refresh() {
     statusEl.textContent = "Voix isolées, musique retirée." + (bits.length ? " (" + bits.join(" · ") + ")" : "");
     progressZone.classList.add("hidden");
   } else if (st.started) {
-    if (statusDot) statusDot.className = "status-dot loading";
+    if (statusDot) statusDot.className = "btn-dot loading";
     if (toggleLabel) toggleLabel.textContent = "Voix prêtes…";
     statusEl.textContent = "Pré-chargement terminé — synchronisation du lecteur…";
     progressZone.classList.add("hidden");
   } else {
-    if (statusDot) statusDot.className = "status-dot loading";
+    if (statusDot) statusDot.className = "btn-dot loading";
     if (toggleLabel) toggleLabel.textContent = "Préparation en cours…";
     statusEl.textContent = "Séparation en cours sur ton PC…";
   }

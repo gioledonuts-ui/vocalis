@@ -1,0 +1,28 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgTile" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#141620"/>
+      <stop offset="100%" stop-color="#0a0b10"/>
+    </linearGradient>
+    <linearGradient id="borderStroke" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2d3348"/>
+      <stop offset="100%" stop-color="#151824"/>
+    </linearGradient>
+    <linearGradient id="vocalisGrad" x1="90" y1="256" x2="422" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="35%" stop-color="#6366f1"/>
+      <stop offset="70%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Squircle rounded background -->
+  <rect x="4" y="4" width="504" height="504" rx="116" fill="url(#bgTile)" stroke="url(#borderStroke)" stroke-width="8"/>
+
+  <!-- The 5 precision acoustic equalizer bars forming the iconic Vocalis V -->
+  <rect x="90" y="110" width="44" height="210" rx="22" fill="url(#vocalisGrad)"/>
+  <rect x="162" y="165" width="44" height="200" rx="22" fill="url(#vocalisGrad)"/>
+  <rect x="234" y="220" width="44" height="185" rx="22" fill="url(#vocalisGrad)"/>
+  <rect x="306" y="165" width="44" height="200" rx="22" fill="url(#vocalisGrad)"/>
+  <rect x="378" y="110" width="44" height="210" rx="22" fill="url(#vocalisGrad)"/>
+</svg>

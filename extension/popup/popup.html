@@ -7,101 +7,90 @@
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-  <header>
-    <div class="brand">
-      <div class="logo-badge">
-        <img src="../icons/icon32.png" alt="Vocalis" width="28" height="28" />
-      </div>
-      <div class="titles">
-        <div class="title-row">
-          <h1>Vocalis</h1>
-          <span class="version-tag" id="version">v0.5.12</span>
+  <div class="popup-wrapper">
+    <!-- En-tête épuré et artisanal -->
+    <header class="header">
+      <div class="brand">
+        <img src="../icons/icon32.png" alt="Vocalis" width="32" height="32" class="brand-logo" />
+        <div class="brand-meta">
+          <div class="title-row">
+            <span class="brand-name">Vocalis</span>
+            <span class="version-tag" id="version">v0.5.15</span>
+          </div>
+          <span class="brand-desc">Isolation vocale en temps réel</span>
         </div>
-        <p class="tagline">YouTube sans musique de fond</p>
       </div>
-    </div>
-  </header>
+    </header>
 
-  <main>
-    <!-- Bouton principal avec halo néon -->
-    <button id="toggle" class="main-toggle" disabled>
-      <span class="toggle-icon">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor">
-          <path d="M 4,7 L 11,20 C 11.4,20.8 12.6,20.8 13,20 L 20,7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M 2,13 C 5,9 8,17 11,13 C 13,10 14,10 16,13 C 18,17 21,9 23,13" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-      </span>
-      <span class="toggle-label" id="toggle-label">Chargement…</span>
-    </button>
-
-    <!-- Statut textuel direct -->
-    <div class="status-zone">
-      <div class="status-dot" id="status-dot"></div>
-      <p id="status" class="status-text">Initialisation…</p>
-    </div>
-
-    <!-- Stepper de progression à 3 étapes -->
-    <div id="progress-zone" class="stepper-card hidden">
-      <div class="stepper-header">
-        <span class="stepper-title" id="stepper-step-title">Traitement en cours</span>
-        <span class="stepper-pct" id="stepper-pct">0 %</span>
-      </div>
-      <div class="progress-track">
-        <div class="progress-fill" id="progress-fill"></div>
-      </div>
-      <div class="stepper-steps">
-        <div class="step-pill" id="step-pill-audio">1. Audio HD</div>
-        <div class="step-pill" id="step-pill-ia">2. IA Demucs</div>
-        <div class="step-pill" id="step-pill-vocal">3. Voix</div>
-      </div>
-      <p class="progress-sub" id="progress-label">Préparation de l'audio…</p>
-    </div>
-
-    <!-- Badges techniques en temps réel -->
-    <div class="specs-grid">
-      <div class="spec-card">
-        <span class="spec-label">MOTEUR</span>
-        <span class="spec-val" id="spec-engine">WebGPU</span>
-      </div>
-      <div class="spec-card">
-        <span class="spec-label">TAMPON</span>
-        <span class="spec-val" id="spec-buffer">0 s</span>
-      </div>
-      <div class="spec-card">
-        <span class="spec-label">CONFIDENTIALITÉ</span>
-        <span class="spec-val">100% Local</span>
-      </div>
-    </div>
-
-    <!-- Alerte F5 après mise à jour -->
-    <div id="sync-warning" class="sync-warning hidden">
-      <p>⚠️ Page YouTube ouverte avant la mise à jour.</p>
-      <button id="reload-tab-btn" class="reload-tab-btn" type="button">🔄 Recharger YouTube (F5)</button>
-    </div>
-
-    <!-- Accès Studio local -->
-    <div class="studio-zone">
-      <button id="open-studio" class="studio-btn" type="button">
-        <span class="studio-icon">🎙️</span>
-        <span>Studio local (tester un MP3/WAV)</span>
+    <main class="content">
+      <!-- Bouton d'action principal -->
+      <button id="toggle" class="action-btn" disabled>
+        <span class="btn-dot" id="status-dot"></span>
+        <span class="btn-label" id="toggle-label">Chargement…</span>
       </button>
-    </div>
 
-    <!-- Journal d'activité repliable -->
-    <details class="journal-details">
-      <summary>Journal d'activité & diagnostics</summary>
-      <div id="journal" class="journal"></div>
-    </details>
-  </main>
+      <!-- Message de statut contextuel -->
+      <p id="status" class="status-message">Prêt. Clique pour activer.</p>
 
-  <footer>
-    <div class="footer-left">
-      <span class="shield">🛡️</span> Traitement 100% local sur ton GPU
-    </div>
-    <div class="footer-right">
+      <!-- Carte de progression (pendant l'acquisition ou le pré-chargement) -->
+      <div id="progress-zone" class="progress-card hidden">
+        <div class="progress-info">
+          <span class="progress-title" id="stepper-step-title">Traitement en cours</span>
+          <span class="progress-pct" id="stepper-pct">0 %</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-bar" id="progress-fill"></div>
+        </div>
+        <p class="progress-sub" id="progress-label">Pré-chargement des voix…</p>
+      </div>
+
+      <!-- Ligne matérielle discrète (sobriété & précision) -->
+      <div class="hardware-row">
+        <div class="hw-item">
+          <span class="hw-label">Moteur :</span>
+          <span class="hw-val" id="spec-engine">WebGPU</span>
+        </div>
+        <div class="hw-sep">·</div>
+        <div class="hw-item">
+          <span class="hw-label">Tampon :</span>
+          <span class="hw-val" id="spec-buffer">0 s</span>
+        </div>
+        <div class="hw-sep">·</div>
+        <div class="hw-item">
+          <span class="hw-badge">100% Local</span>
+        </div>
+      </div>
+
+      <!-- Avertissement si l'onglet YouTube a été ouvert avant la mise à jour -->
+      <div id="sync-warning" class="sync-banner hidden">
+        <span>⚠️ Actualisation requise pour cette page</span>
+        <button id="reload-tab-btn" class="sync-btn" type="button">Recharger YouTube (F5)</button>
+      </div>
+
+      <!-- Carte d'accès à Vocalis Studio -->
+      <div id="open-studio" class="studio-card" role="button" tabindex="0">
+        <div class="studio-card-left">
+          <div class="studio-title-row">
+            <span class="studio-icon">🎙️</span>
+            <span class="studio-title">Vocalis Studio</span>
+          </div>
+          <span class="studio-desc">Nettoyer un fichier audio (MP3, WAV, FLAC…)</span>
+        </div>
+        <span class="studio-arrow">→</span>
+      </div>
+
+      <!-- Diagnostics techniques repliables -->
+      <details class="diagnostics-drawer">
+        <summary>Diagnostics techniques</summary>
+        <div id="journal" class="diagnostics-logs"></div>
+      </details>
+    </main>
+
+    <footer class="footer">
+      <span>100% local sur ton GPU · Zéro fuite</span>
       <a href="https://github.com/gioledonuts-ui/vocalis" target="_blank" rel="noreferrer">GitHub</a>
-    </div>
-  </footer>
+    </footer>
+  </div>
 
   <script src="popup.js"></script>
 </body>

@@ -1,13 +1,20 @@
+/* ============================================================
+   Vocalis Studio — Feuille de style (Artisanal, épuré, haute précision)
+   ============================================================ */
+
 :root {
-  --bg: #0f0d19;
-  --card-bg: #181528;
-  --card-border: #2c2642;
-  --text: #f1effa;
-  --text-muted: #958eb3;
-  --accent: #8b5cf6;
-  --accent-2: #ec4899;
-  --cyan: #06b6d4;
-  --green: #10b981;
+  --bg: #0b0d13;
+  --surface: #121520;
+  --surface-hover: #181d2a;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-focus: rgba(99, 102, 241, 0.4);
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  --accent-cyan: #38bdf8;
+  --accent-indigo: #6366f1;
+  --accent-violet: #a855f7;
+  --success: #10b981;
 }
 
 * {
@@ -21,102 +28,125 @@ body {
   background-color: var(--bg);
   color: var(--text);
   line-height: 1.5;
-  padding: 32px 16px;
+  padding: 48px 20px;
   display: flex;
   justify-content: center;
+  -webkit-font-smoothing: antialiased;
 }
 
-.container {
+.studio-container {
   width: 100%;
-  max-width: 760px;
+  max-width: 720px;
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
 
-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+/* ---------------- En-tête ---------------- */
+.studio-header {
   padding-bottom: 8px;
 }
 
-.logo {
+.brand-block {
   display: flex;
   align-items: center;
-  gap: 4px;
-  height: 36px;
+  gap: 16px;
 }
 
-.logo .bar {
-  width: 5px;
-  border-radius: 3px;
-  background: linear-gradient(180deg, var(--accent), var(--cyan));
+.studio-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
 }
 
-.b1 { height: 12px; }
-.b2 { height: 26px; }
-.b3 { height: 36px; }
-.b4 { height: 20px; }
-.b5 { height: 30px; }
+.brand-titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.title-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 
 h1 {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
-  letter-spacing: -0.5px;
-  background: linear-gradient(90deg, #fff, #c4b5fd);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.4px;
+  color: var(--text);
+}
+
+.badge-tag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(56, 189, 248, 0.25);
 }
 
 .subtitle {
   color: var(--text-muted);
-  font-size: 13.5px;
+  font-size: 13px;
   margin-top: 2px;
 }
 
+/* ---------------- Cartes ---------------- */
 .card {
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.15s ease;
 }
 
 .hidden {
   display: none !important;
 }
 
-/* Zone de drop */
+/* ---------------- Zone de dépôt ---------------- */
 .drop-zone {
-  border: 2px dashed #403861;
-  border-radius: 12px;
-  padding: 44px 24px;
+  border: 2px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 48px 24px;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: rgba(139, 92, 246, 0.02);
+  background: rgba(255, 255, 255, 0.015);
 }
 
 .drop-zone:hover, .drop-zone.dragover {
-  border-color: var(--accent);
-  background: rgba(139, 92, 246, 0.08);
-  transform: scale(1.005);
+  border-color: var(--accent-cyan);
+  background: rgba(56, 189, 248, 0.04);
 }
 
-.drop-icon {
-  font-size: 42px;
-  margin-bottom: 12px;
+.drop-icon-wrapper {
+  color: var(--text-muted);
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: center;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.drop-zone:hover .drop-icon-wrapper {
+  transform: translateY(-2px);
+  color: var(--accent-cyan);
 }
 
 .drop-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text);
+  letter-spacing: -0.2px;
 }
 
 .drop-hint {
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-muted);
   margin-top: 6px;
 }
@@ -125,7 +155,7 @@ h1 {
   display: none;
 }
 
-/* Fichier sélectionné */
+/* ---------------- Fichier sélectionné ---------------- */
 .file-info {
   display: flex;
   flex-direction: column;
@@ -137,19 +167,29 @@ h1 {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #110e1e;
+  background: rgba(0, 0, 0, 0.25);
   border-radius: 8px;
-  border: 1px solid #2f2847;
+  border: 1px solid var(--border);
+}
+
+.file-meta-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.file-icon {
+  font-size: 16px;
 }
 
 .file-name {
   font-weight: 600;
-  color: #fff;
-  font-size: 14px;
+  color: var(--text);
+  font-size: 13.5px;
 }
 
 .file-details {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
@@ -158,11 +198,12 @@ h1 {
   gap: 12px;
 }
 
+/* ---------------- Boutons ---------------- */
 .btn {
-  padding: 12px 20px;
+  padding: 11px 20px;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -170,44 +211,61 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
 }
 
 .btn-primary {
-  background: linear-gradient(90deg, #7c3aed, #9333ea);
+  background: #1e2538;
+  border: 1px solid rgba(255, 255, 255, 0.15);
   color: #fff;
   flex: 1;
 }
 
 .btn-primary:hover {
-  filter: brightness(1.15);
-  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.4);
+  background: #252e46;
+  border-color: rgba(56, 189, 248, 0.5);
+  transform: translateY(-0.5px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-arrow {
+  color: var(--accent-cyan);
+  transition: transform 0.15s ease;
+}
+
+.btn-primary:hover .btn-arrow {
+  transform: translateX(2px);
 }
 
 .btn-secondary {
-  background: #25203b;
-  color: #c4b5fd;
-  border: 1px solid var(--card-border);
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
 }
 
 .btn-secondary:hover {
-  background: #2d2747;
-  color: #fff;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
 }
 
 .btn-download {
-  background: linear-gradient(90deg, #10b981, #059669);
-  color: #fff;
-  padding: 14px 24px;
-  font-size: 15px;
-  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.35);
+  background: #064e3b;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #a7f3d0;
+  padding: 12px 24px;
+  font-size: 14px;
 }
 
 .btn-download:hover {
-  filter: brightness(1.1);
-  transform: translateY(-1px);
+  background: #065f46;
+  border-color: rgba(16, 185, 129, 0.7);
+  transform: translateY(-0.5px);
 }
 
-/* Barre de progression */
+/* ---------------- Barre de progression ---------------- */
 .progress-header {
   display: flex;
   justify-content: space-between;
@@ -217,42 +275,42 @@ h1 {
 
 .progress-status {
   font-weight: 600;
-  font-size: 14.5px;
-  color: #fff;
+  font-size: 13.5px;
+  color: var(--text);
 }
 
 .progress-pct {
   font-weight: 700;
-  color: var(--cyan);
-  font-size: 16px;
+  color: var(--accent-cyan);
+  font-size: 14px;
 }
 
 .progress-bar-bg {
   width: 100%;
-  height: 10px;
-  background: #110e1e;
-  border-radius: 5px;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
   overflow: hidden;
-  border: 1px solid #2f2847;
+  border: 1px solid var(--border);
 }
 
 .progress-bar-fill {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, var(--accent), var(--cyan));
-  border-radius: 5px;
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-violet));
+  border-radius: 3px;
   transition: width 0.25s ease;
 }
 
 .progress-sub {
   display: flex;
   justify-content: space-between;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-muted);
   margin-top: 8px;
 }
 
-/* Résultat */
+/* ---------------- Résultat ---------------- */
 .result-header {
   display: flex;
   justify-content: space-between;
@@ -261,26 +319,26 @@ h1 {
 }
 
 .success-badge {
-  background: rgba(16, 185, 129, 0.15);
+  background: rgba(16, 185, 129, 0.12);
   color: #34d399;
-  padding: 6px 12px;
-  border-radius: 20px;
+  padding: 4px 10px;
+  border-radius: 6px;
   font-weight: 600;
-  font-size: 13px;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  font-size: 12.5px;
+  border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
 .result-timing {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
 .player-zone {
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .player-label {
-  font-size: 13.5px;
+  font-size: 12.5px;
   color: var(--text-muted);
   margin-bottom: 8px;
 }
@@ -288,7 +346,7 @@ h1 {
 .audio-player {
   width: 100%;
   outline: none;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .download-zone {
@@ -296,32 +354,36 @@ h1 {
   gap: 12px;
 }
 
-/* Journal technique */
+/* ---------------- Journal technique ---------------- */
 .journal-card {
-  padding: 16px;
+  padding: 14px 18px;
 }
 
 .journal-header {
   display: flex;
   justify-content: space-between;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-muted);
   user-select: none;
 }
 
+.journal-header:hover {
+  color: var(--text);
+}
+
 .journal-logs {
   margin-top: 10px;
-  max-height: 180px;
+  max-height: 160px;
   overflow-y: auto;
   font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 11px;
-  background: #090810;
+  background: #07080d;
   padding: 12px;
-  border-radius: 8px;
-  border: 1px solid #221d33;
-  color: #a7a1c4;
-  line-height: 1.6;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  color: #94a3b8;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
 }
